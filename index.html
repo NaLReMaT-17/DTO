@@ -1,0 +1,3163 @@
+<!DOCTYPE html>
+<html lang="ru" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Архитектура устройств 3D — Интерактивный Учебный Комплекс</title>
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['Fira Code', 'monospace']
+                    }
+                }
+            }
+        };
+    </script>
+
+    <!-- Three.js для интерактивных 3D-моделей (Ноутбук, Сервер, SBC) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <!-- Google Model Viewer для GLB-моделей ПК и пользовательских файлов -->
+    <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
+
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <style>
+        /* Базовые плавные переходы темы */
+        html {
+            scroll-behavior: smooth;
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            overflow-x: hidden;
+            transition: background-color 0.25s ease, color 0.25s ease;
+        }
+
+        /* Вертикальный скроллбар */
+        ::-webkit-scrollbar {
+            width: 7px;
+            height: 7px;
+        }
+        .dark ::-webkit-scrollbar-track { background: #090d16; }
+        .dark ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 9999px; }
+        .dark ::-webkit-scrollbar-thumb:hover { background: #06b6d4; }
+        html:not(.dark) ::-webkit-scrollbar-track { background: #f1f5f9; }
+        html:not(.dark) ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
+        html:not(.dark) ::-webkit-scrollbar-thumb:hover { background: #0891b2; }
+
+        /* Горизонтальный скроллбар панели компонентов */
+        .custom-scrollbar::-webkit-scrollbar { height: 5px; }
+        .dark .custom-scrollbar::-webkit-scrollbar-track { background: rgba(30, 41, 59, 0.5); border-radius: 9999px; }
+        .dark .custom-scrollbar::-webkit-scrollbar-thumb { background: #06b6d4; border-radius: 9999px; }
+        html:not(.dark) .custom-scrollbar::-webkit-scrollbar-track { background: rgba(226, 232, 240, 0.8); border-radius: 9999px; }
+        html:not(.dark) .custom-scrollbar::-webkit-scrollbar-thumb { background: #0891b2; border-radius: 9999px; }
+
+        /* Адаптивные стеклянные панели */
+        .glass-panel {
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            transition: background-color 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+        }
+        .dark .glass-panel {
+            background: rgba(15, 23, 42, 0.78);
+            border: 1px solid rgba(148, 163, 184, 0.14);
+            box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.45);
+        }
+        html:not(.dark) .glass-panel {
+            background: rgba(255, 255, 255, 0.86);
+            border: 1px solid rgba(148, 163, 184, 0.28);
+            box-shadow: 0 10px 30px -12px rgba(15, 23, 42, 0.1);
+        }
+
+        /* Фон 3D-вьюпорта */
+        .viewport-bg {
+            transition: background 0.3s ease;
+        }
+        .dark .viewport-bg {
+            background: radial-gradient(circle at 50% 45%, #1e293b 0%, #0b1120 72%, #050811 100%);
+        }
+        html:not(.dark) .viewport-bg {
+            background: radial-gradient(circle at 50% 45%, #ffffff 0%, #e2e8f0 75%, #cbd5e1 100%);
+        }
+
+        /* Разрешаем вертикальную прокрутку страницы */
+        #three-canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            cursor: grab;
+            touch-action: pan-y;
+        }
+        #three-canvas:active {
+            cursor: grabbing;
+        }
+
+        /* Model Viewer для GLB-моделей ПК и пользовательских файлов */
+        model-viewer#glb-viewer {
+            width: 100%;
+            height: 100%;
+            --poster-color: transparent;
+            background: transparent;
+        }
+
+        /* 3D-хотспоты поверх сцены */
+        .hotspot-pin {
+            position: absolute;
+            transform: translate(-50%, -50%);
+            z-index: 15;
+            pointer-events: auto;
+            transition: opacity 0.18s ease;
+        }
+        .hotspot-dot {
+            width: 24px;
+            height: 24px;
+            border-radius: 9999px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.32);
+            transition: transform 0.2s ease, background-color 0.2s ease;
+        }
+        .hotspot-dot:hover {
+            transform: scale(1.18);
+        }
+
+        /* Ползунок взрыв-схемы */
+        input[type="range"].explode-slider {
+            -webkit-appearance: none;
+            appearance: none;
+            height: 6px;
+            border-radius: 9999px;
+            outline: none;
+        }
+        input[type="range"].explode-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 9999px;
+            background: #06b6d4;
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(6, 182, 212, 0.55);
+            border: 2px solid #ffffff;
+        }
+    </style>
+</head>
+
+<body class="min-h-screen flex flex-col justify-between bg-slate-100 text-slate-900 dark:bg-[#070b14] dark:text-slate-100 selection:bg-cyan-400 selection:text-slate-950">
+
+    <!-- Контейнер тост-уведомлений -->
+    <div id="toast-container" aria-live="polite" class="fixed bottom-5 right-5 z-[100] flex flex-col gap-2 pointer-events-none"></div>
+
+    <!-- ВЕРХНЯЯ НАВИГАЦИОННАЯ ПАНЕЛЬ -->
+    <header class="sticky top-0 z-50 glass-panel border-b border-slate-200/80 dark:border-slate-800/80 px-4 lg:px-8 py-3">
+        <div class="max-w-7xl mx-auto flex items-center justify-between gap-3">
+            <!-- Логотип -->
+            <button type="button" onclick="switchTab('devices')" aria-label="На главную — каталог устройств" class="flex items-center gap-3 text-left select-none focus:outline-none focus:ring-2 focus:ring-cyan-500 rounded-xl p-1 -m-1">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 to-emerald-400 flex items-center justify-center text-slate-950 font-black text-xl shadow-lg shadow-cyan-500/25 shrink-0">
+                    <i class="fa-solid fa-microchip" aria-hidden="true"></i>
+                </div>
+                <div class="min-w-0">
+                    <span class="text-base sm:text-lg font-extrabold tracking-tight text-slate-900 dark:text-white flex items-center gap-2 truncate">
+                        <span>Архитектура устройств</span>
+                        <span class="text-[10px] sm:text-xs px-2 py-0.5 rounded-full bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border border-cyan-500/30 font-semibold">3D Lab</span>
+                    </span>
+                    <span class="text-[11px] text-slate-500 dark:text-slate-400 hidden sm:block">Интерактивный учебный комплекс по ЭВМ</span>
+                </div>
+            </button>
+
+            <!-- Центральные вкладки (Desktop) -->
+            <nav aria-label="Основная навигация" class="hidden md:flex items-center gap-1 bg-slate-200/70 dark:bg-slate-900/80 p-1.5 rounded-xl border border-slate-300/70 dark:border-slate-800">
+                <button type="button" onclick="switchTab('devices')" id="nav-devices" class="nav-btn flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all">
+                    <i class="fa-solid fa-layer-group" aria-hidden="true"></i> Устройства
+                </button>
+                <button type="button" onclick="switchTab('quiz')" id="nav-quiz" class="nav-btn flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all">
+                    <i class="fa-solid fa-clipboard-check" aria-hidden="true"></i> Тест
+                </button>
+                <button type="button" onclick="switchTab('guide')" id="nav-guide" class="nav-btn flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all">
+                    <i class="fa-solid fa-book-open" aria-hidden="true"></i> Справочник
+                </button>
+            </nav>
+
+            <!-- Правая группа -->
+            <div class="flex items-center gap-2 sm:gap-2.5">
+                <div class="hidden xl:flex items-center gap-3 px-3 py-1.5 rounded-xl bg-slate-200/70 dark:bg-slate-900/80 border border-slate-300/60 dark:border-slate-800 text-xs">
+                    <span class="flex items-center gap-1.5" title="Изученные 3D-компоненты">
+                        <i class="fa-solid fa-cubes text-cyan-500" aria-hidden="true"></i>
+                        <span class="text-slate-600 dark:text-slate-400">Курс:</span>
+                        <span id="header-progress-text" class="font-bold font-mono text-cyan-700 dark:text-cyan-400">0%</span>
+                    </span>
+                    <span class="w-px h-4 bg-slate-300 dark:bg-slate-700"></span>
+                    <span class="flex items-center gap-1.5" title="Лучший результат теста">
+                        <i class="fa-solid fa-trophy text-amber-500" aria-hidden="true"></i>
+                        <span class="text-slate-600 dark:text-slate-400">Тест:</span>
+                        <span id="header-quiz-best" class="font-bold font-mono text-emerald-700 dark:text-emerald-400">—</span>
+                    </span>
+                </div>
+
+                <button type="button" onclick="toggleTheme()" id="theme-toggle-btn" aria-label="Переключить светлую и тёмную тему" title="Сменить светлую / тёмную тему" class="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-200/80 hover:bg-slate-300/80 dark:bg-slate-800/90 dark:hover:bg-slate-700 text-slate-700 dark:text-amber-300 border border-slate-300/80 dark:border-slate-700 transition-all text-sm font-semibold shadow-sm">
+                    <i id="theme-icon" class="fa-solid fa-sun text-base" aria-hidden="true"></i>
+                    <span id="theme-label" class="hidden sm:inline text-xs text-slate-700 dark:text-slate-200">Светлая</span>
+                </button>
+
+                <button type="button" onclick="toggleMobileMenu()" aria-label="Открыть мобильное меню" class="md:hidden p-2.5 rounded-xl bg-slate-200/80 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-300/80 dark:border-slate-700">
+                    <i class="fa-solid fa-bars text-lg" aria-hidden="true"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Выпадающее мобильное меню -->
+        <div id="mobile-menu" class="hidden md:hidden mt-3 pt-3 border-t border-slate-200 dark:border-slate-800 flex flex-col gap-2">
+            <button type="button" onclick="switchTab('devices'); toggleMobileMenu();" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-800">
+                <i class="fa-solid fa-layer-group w-5 text-cyan-500" aria-hidden="true"></i> Каталог устройств
+            </button>
+            <button type="button" onclick="switchTab('quiz'); toggleMobileMenu();" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-800">
+                <i class="fa-solid fa-clipboard-check w-5 text-emerald-500" aria-hidden="true"></i> Проверка знаний (Тест)
+            </button>
+            <button type="button" onclick="switchTab('guide'); toggleMobileMenu();" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-800">
+                <i class="fa-solid fa-book-open w-5 text-purple-500" aria-hidden="true"></i> Справочник и документация
+            </button>
+        </div>
+    </header>
+
+    <!-- ОСНОВНОЙ КОНТЕНТ -->
+    <main class="flex-1 max-w-7xl w-full mx-auto p-4 lg:p-6 space-y-6">
+
+        <!-- ВКЛАДКА 0: КАТАЛОГ УСТРОЙСТВ (Главная) -->
+        <section id="tab-devices" class="tab-content space-y-6">
+            <div class="glass-panel p-6 sm:p-8 rounded-3xl relative overflow-hidden">
+                <div class="absolute -right-16 -top-16 w-64 h-64 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none"></div>
+                <div class="absolute -left-16 -bottom-16 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+                <div class="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+                    <div class="space-y-2 max-w-2xl">
+                        <span id="hero-stats-badge" class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-cyan-500/10 text-cyan-700 dark:text-cyan-300 border border-cyan-500/25">
+                            <i class="fa-solid fa-cubes" aria-hidden="true"></i> Загрузка каталога…
+                        </span>
+                        <h2 class="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+                            Выберите устройство для изучения архитектуры
+                        </h2>
+                        <p class="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
+                            Изучайте GLB-модели персонального компьютера и детализированные интерактивные 3D-узлы ноутбука, стоечного сервера и одноплатного ПК с разборкой, аннотациями и тестом.
+                        </p>
+                    </div>
+
+                    <div class="w-full lg:w-80 space-y-2">
+                        <div class="relative">
+                            <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm" aria-hidden="true"></i>
+                            <input id="device-search" type="search" aria-label="Поиск устройств и компонентов" oninput="debouncedDeviceSearch(this.value)" placeholder="Поиск: процессор, сервер, GPIO…" class="w-full pl-10 pr-4 py-2.5 rounded-xl text-sm bg-white/90 dark:bg-slate-950/80 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-cyan-500 transition-all">
+                        </div>
+                        <div class="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 px-1">
+                            <span>Общий прогресс курса</span>
+                            <button type="button" onclick="resetStudyProgress()" class="hover:text-cyan-600 dark:hover:text-cyan-400 underline">Сбросить прогресс</button>
+                        </div>
+                        <div class="w-full h-2 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden" role="progressbar" aria-label="Прогресс изучения курса" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="global-progress-track">
+                            <div id="global-progress-bar" class="h-full bg-gradient-to-r from-cyan-500 to-emerald-400 transition-all duration-500" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="devices-grid" class="grid grid-cols-1 md:grid-cols-2 gap-6"></div>
+        </section>
+
+        <!-- ВКЛАДКА 1: 3D-ЛАБОРАТОРИЯ (Explorer) -->
+        <section id="tab-explorer" class="tab-content hidden space-y-5">
+            <div class="glass-panel p-3.5 sm:p-4 rounded-2xl flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-3">
+                <div class="flex items-center justify-between xl:justify-start gap-3 shrink-0">
+                    <div class="flex items-center gap-3">
+                        <button type="button" onclick="switchTab('devices')" aria-label="Вернуться к списку устройств" class="px-3 py-2 rounded-xl bg-slate-200/80 hover:bg-slate-300/80 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 hover:text-cyan-600 dark:hover:text-cyan-400 text-xs font-semibold flex items-center gap-2 transition-all border border-slate-300/70 dark:border-slate-700">
+                            <i class="fa-solid fa-arrow-left" aria-hidden="true"></i> <span>К устройствам</span>
+                        </button>
+                        <div class="h-6 w-px bg-slate-300 dark:bg-slate-700 hidden sm:block"></div>
+                        <span id="current-device-name" class="text-xs sm:text-sm font-bold text-cyan-700 dark:text-cyan-400 uppercase tracking-wider truncate">ПК</span>
+                    </div>
+                </div>
+
+                <div class="flex-1 min-w-0">
+                    <div id="component-pills-container" class="flex flex-nowrap items-center gap-2 overflow-x-auto custom-scrollbar pb-1.5"></div>
+                </div>
+
+                <div class="flex flex-wrap items-center gap-1.5 shrink-0 pt-2 xl:pt-0 border-t xl:border-t-0 border-slate-200 dark:border-slate-800">
+                    <button type="button" onclick="toggleAutoRotate()" id="btn-auto-rotate" aria-label="Переключить авто-вращение модели" title="Авто-вращение (Пробел)" class="px-2.5 py-2 rounded-xl bg-slate-200/80 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-cyan-600 dark:text-cyan-400 text-xs font-semibold flex items-center gap-1.5 transition-all border border-slate-300/70 dark:border-slate-700">
+                        <i class="fa-solid fa-rotate" aria-hidden="true"></i> <span class="hidden sm:inline">Вращение</span>
+                    </button>
+                    <button type="button" onclick="toggleHotspots()" id="btn-hotspots" aria-label="Показать или скрыть 3D-метки" title="Показать / скрыть 3D-метки" class="px-2.5 py-2 rounded-xl bg-slate-200/80 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-cyan-600 dark:text-cyan-400 text-xs font-semibold flex items-center gap-1.5 transition-all border border-slate-300/70 dark:border-slate-700">
+                        <i class="fa-solid fa-location-dot" aria-hidden="true"></i> <span class="hidden sm:inline">Метки</span>
+                    </button>
+                    <button type="button" onclick="toggleWireframe()" id="btn-wireframe" aria-label="Переключить каркасный режим" title="Каркасный режим (X-Ray)" class="px-2.5 py-2 rounded-xl bg-slate-200/80 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs font-semibold flex items-center gap-1.5 transition-all border border-slate-300/70 dark:border-slate-700">
+                        <i class="fa-solid fa-border-all" aria-hidden="true"></i> <span class="hidden sm:inline">Каркас</span>
+                    </button>
+                    <button type="button" onclick="reset3DCamera()" aria-label="Сбросить ракурс камеры" title="Сбросить ракурс (R)" class="px-2.5 py-2 rounded-xl bg-slate-200/80 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 hover:text-cyan-600 dark:hover:text-cyan-400 text-xs font-semibold flex items-center gap-1.5 transition-all border border-slate-300/70 dark:border-slate-700">
+                        <i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i> <span class="hidden sm:inline">Сброс</span>
+                    </button>
+                    <button type="button" onclick="capture3DScreenshot()" aria-label="Сохранить скриншот 3D-модели в PNG" title="Сохранить скриншот PNG" class="p-2 rounded-xl bg-slate-200/80 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 hover:text-cyan-600 dark:hover:text-cyan-400 text-xs transition-all border border-slate-300/70 dark:border-slate-700">
+                        <i class="fa-solid fa-camera" aria-hidden="true"></i>
+                    </button>
+                    <label title="Загрузить свою .GLB / .GLTF модель" aria-label="Загрузить свою GLB или GLTF модель" class="cursor-pointer p-2 rounded-xl bg-slate-200/80 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 hover:text-emerald-600 dark:hover:text-emerald-400 text-xs transition-all border border-slate-300/70 dark:border-slate-700 flex items-center gap-1">
+                        <i class="fa-solid fa-file-arrow-up" aria-hidden="true"></i>
+                        <input id="glb-file-input" type="file" accept=".glb,.gltf" class="hidden" onchange="handleCustomGLBUpload(event)">
+                    </label>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div id="viewport-wrapper" class="lg:col-span-2 glass-panel p-3 rounded-2xl relative flex flex-col justify-between overflow-hidden">
+                    <div id="viewport-stage" class="viewport-bg relative w-full h-[460px] sm:h-[520px] rounded-xl overflow-hidden border border-slate-300/60 dark:border-slate-800">
+                        <div class="absolute top-4 left-4 z-20 flex items-center gap-2 bg-white/85 dark:bg-slate-900/90 backdrop-blur-md px-3 py-1.5 rounded-xl border border-slate-300/70 dark:border-slate-700/70 shadow-sm max-w-[68%]">
+                            <span class="w-2.5 h-2.5 rounded-full bg-cyan-500 animate-pulse shrink-0"></span>
+                            <span id="active-model-title" class="text-xs font-bold tracking-wide uppercase text-cyan-700 dark:text-cyan-300 truncate">Загрузка…</span>
+                            <span id="active-format-badge" class="hidden sm:inline-block text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-200/80 dark:bg-slate-800 text-slate-600 dark:text-slate-400">3D</span>
+                        </div>
+
+                        <div class="absolute top-4 right-4 z-20 flex items-center gap-1.5">
+                            <button type="button" id="btn-zoom-in" aria-label="Приблизить камеру" title="Приблизить (можно удерживать)" class="w-8 h-8 rounded-xl bg-white/85 dark:bg-slate-900/90 backdrop-blur-md border border-slate-300/70 dark:border-slate-700/70 text-slate-700 dark:text-slate-200 hover:text-cyan-600 dark:hover:text-cyan-400 flex items-center justify-center text-xs shadow-sm transition-colors">
+                                <i class="fa-solid fa-plus" aria-hidden="true"></i>
+                            </button>
+                            <button type="button" id="btn-zoom-out" aria-label="Отдалить камеру" title="Отдалить (можно удерживать)" class="w-8 h-8 rounded-xl bg-white/85 dark:bg-slate-900/90 backdrop-blur-md border border-slate-300/70 dark:border-slate-700/70 text-slate-700 dark:text-slate-200 hover:text-cyan-600 dark:hover:text-cyan-400 flex items-center justify-center text-xs shadow-sm transition-colors">
+                                <i class="fa-solid fa-minus" aria-hidden="true"></i>
+                            </button>
+                            <button type="button" onclick="toggleFullscreenViewport()" aria-label="Открыть 3D-сцену на весь экран" title="На весь экран" class="w-8 h-8 rounded-xl bg-white/85 dark:bg-slate-900/90 backdrop-blur-md border border-slate-300/70 dark:border-slate-700/70 text-slate-700 dark:text-slate-200 hover:text-cyan-600 dark:hover:text-cyan-400 flex items-center justify-center text-xs shadow-sm transition-colors">
+                                <i class="fa-solid fa-expand" aria-hidden="true"></i>
+                            </button>
+                        </div>
+
+                        <button type="button" id="exit-custom-glb-btn" onclick="exitCustomGLBMode()" class="hidden absolute top-16 left-4 z-20 px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold shadow-lg flex items-center gap-1.5">
+                            <i class="fa-solid fa-arrow-rotate-left" aria-hidden="true"></i> Вернуться к модели курса
+                        </button>
+
+                        <div id="viewport-loader" class="hidden absolute inset-0 z-30 bg-slate-100/75 dark:bg-slate-950/75 backdrop-blur-sm flex flex-col items-center justify-center gap-3 pointer-events-none">
+                            <div class="w-10 h-10 rounded-full border-4 border-cyan-500/30 border-t-cyan-500 animate-spin"></div>
+                            <span id="viewport-loader-text" class="text-xs font-semibold text-slate-700 dark:text-slate-200">Загрузка 3D-модели…</span>
+                        </div>
+
+                        <div id="viewport-fallback" class="hidden absolute inset-0 z-20 flex flex-col items-center justify-center p-6 text-center bg-slate-100/90 dark:bg-slate-950/90">
+                            <div class="w-14 h-14 rounded-2xl bg-amber-500/15 text-amber-500 border border-amber-500/30 flex items-center justify-center text-2xl mb-3">
+                                <i class="fa-solid fa-cube" aria-hidden="true"></i>
+                            </div>
+                            <h4 id="viewport-fallback-title" class="text-sm font-bold text-slate-900 dark:text-white mb-1">Модель не найдена</h4>
+                            <p id="viewport-fallback-desc" class="text-xs text-slate-600 dark:text-slate-400 max-w-md leading-relaxed mb-4"></p>
+                            <label class="cursor-pointer px-4 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-bold shadow-md flex items-center gap-2 transition-colors">
+                                <i class="fa-solid fa-file-arrow-up" aria-hidden="true"></i>
+                                <span>Выбрать .GLB файл вручную</span>
+                                <input type="file" accept=".glb,.gltf" class="hidden" onchange="handleCustomGLBUpload(event)">
+                            </label>
+                        </div>
+
+                        <canvas id="three-canvas"></canvas>
+
+                        <div id="hotspots-layer" class="absolute inset-0 pointer-events-none overflow-hidden"></div>
+
+                        <div id="hotspot-popover" class="hidden absolute bottom-20 left-4 z-20 max-w-xs bg-white/95 dark:bg-slate-900/95 backdrop-blur-md p-3.5 rounded-xl border border-cyan-500/40 shadow-xl">
+                            <div class="flex items-start justify-between gap-2 mb-1">
+                                <h4 id="hotspot-popover-title" class="text-xs font-bold text-cyan-700 dark:text-cyan-300">Узел</h4>
+                                <button type="button" onclick="closeHotspotPopover()" aria-label="Закрыть подсказку" class="text-slate-400 hover:text-slate-700 dark:hover:text-white text-xs p-0.5">
+                                    <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                                </button>
+                            </div>
+                            <p id="hotspot-popover-desc" class="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed"></p>
+                        </div>
+
+                        <model-viewer id="glb-viewer" class="hidden absolute inset-0 z-10" alt="3D модель устройства" auto-rotate rotation-per-second="15deg" camera-controls shadow-intensity="1.2" shadow-softness="0.8" exposure="1.0" interaction-prompt="auto">
+                        </model-viewer>
+
+                        <div id="explode-controls-bar" class="absolute bottom-3 left-3 right-3 z-20 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 bg-white/85 dark:bg-slate-950/80 backdrop-blur-md px-3.5 py-2.5 rounded-xl border border-slate-300/70 dark:border-slate-800">
+                            <div class="flex items-center gap-2.5 flex-1">
+                                <button type="button" onclick="toggleExplodedView()" id="btn-explode-toggle" aria-label="Разобрать или собрать 3D-модель" class="px-2.5 py-1 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-700 dark:text-cyan-300 border border-cyan-500/30 text-[11px] font-bold flex items-center gap-1.5 shrink-0 transition-colors">
+                                    <i id="explode-toggle-icon" class="fa-solid fa-up-right-and-down-left-from-center" aria-hidden="true"></i>
+                                    <span id="explode-toggle-label">Разборка</span>
+                                </button>
+                                <input id="explode-slider" type="range" min="0" max="100" value="0" aria-label="Процент разборки 3D-модели" oninput="setExplodePercent(this.value)" class="explode-slider flex-1 bg-slate-300 dark:bg-slate-700">
+                                <span id="explode-percent" class="text-[11px] font-mono font-bold text-slate-600 dark:text-slate-300 w-9 text-right">0%</span>
+                            </div>
+                            <div class="hidden md:flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400 shrink-0 pl-2 border-l border-slate-300 dark:border-slate-800">
+                                <i class="fa-solid fa-hand-pointer text-cyan-500" aria-hidden="true"></i>
+                                <span>ЛКМ — вращение • Колесико — зум</span>
+                            </div>
+                        </div>
+
+                        <div id="glb-hint-bar" class="hidden absolute bottom-3 left-3 right-3 z-20 pointer-events-none flex items-center justify-between text-[11px] text-slate-600 dark:text-slate-400 bg-white/85 dark:bg-slate-950/75 backdrop-blur-md px-4 py-2 rounded-xl border border-slate-300/70 dark:border-slate-800">
+                            <span class="flex items-center gap-2"><i class="fa-solid fa-hand-pointer text-cyan-500" aria-hidden="true"></i> Зажмите ЛКМ для вращения • Колесико — масштаб</span>
+                            <span class="hidden sm:inline font-mono text-slate-500">Format: GLTF / GLB 3D</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="glass-panel p-5 sm:p-6 rounded-2xl flex flex-col justify-between space-y-5">
+                    <div class="space-y-4">
+                        <div class="flex items-start justify-between gap-2 border-b border-slate-200 dark:border-slate-800 pb-4">
+                            <div>
+                                <span class="text-[10px] font-mono font-semibold text-cyan-600 dark:text-cyan-400 uppercase tracking-widest">Анализ компонента</span>
+                                <h3 id="comp-title" class="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white mt-0.5">
+                                    Название компонента
+                                </h3>
+                            </div>
+                            <span id="comp-type-badge" class="shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30">Тип</span>
+                        </div>
+
+                        <div id="comp-description" class="text-sm text-slate-600 dark:text-slate-300 leading-relaxed"></div>
+
+                        <div class="space-y-2">
+                            <h4 class="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                                <i class="fa-solid fa-microchip text-cyan-500" aria-hidden="true"></i> Типовые характеристики
+                            </h4>
+                            <div id="comp-specs" class="grid grid-cols-2 gap-2"></div>
+                        </div>
+
+                        <div class="p-3.5 rounded-xl bg-slate-100/90 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 space-y-1">
+                            <div class="flex items-center gap-2 text-xs font-bold text-slate-800 dark:text-slate-200">
+                                <i class="fa-solid fa-diagram-project text-purple-500" aria-hidden="true"></i>
+                                <span>Взаимодействие в системе</span>
+                            </div>
+                            <p id="comp-bus" class="text-xs text-slate-600 dark:text-slate-400 leading-relaxed"></p>
+                        </div>
+                    </div>
+
+                    <div class="space-y-3">
+                        <div class="bg-gradient-to-r from-cyan-500/10 to-emerald-500/10 p-3.5 rounded-xl border border-cyan-500/25">
+                            <div class="flex items-start gap-2.5">
+                                <div class="w-7 h-7 rounded-lg bg-cyan-500/20 text-cyan-600 dark:text-cyan-400 flex items-center justify-center text-xs shrink-0 mt-0.5">
+                                    <i class="fa-solid fa-lightbulb" aria-hidden="true"></i>
+                                </div>
+                                <div class="text-xs">
+                                    <p class="font-bold text-slate-900 dark:text-white">Инженерный факт</p>
+                                    <p id="comp-fact" class="text-slate-600 dark:text-slate-300 mt-0.5 leading-relaxed"></p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-2">
+                            <button type="button" id="btn-prev-comp" onclick="navigateComponent(-1)" class="flex-1 py-2.5 px-3 rounded-xl bg-slate-200/80 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all disabled:opacity-40 disabled:cursor-not-allowed">
+                                <i class="fa-solid fa-chevron-left" aria-hidden="true"></i> Предыдущий
+                            </button>
+                            <button type="button" id="btn-next-comp" onclick="navigateComponent(1)" class="flex-1 py-2.5 px-3 rounded-xl bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-400 hover:to-teal-400 text-slate-950 text-xs font-bold flex items-center justify-center gap-1.5 shadow-md shadow-cyan-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed">
+                                Следующий <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ВКЛАДКА 2: ПРОВЕРКА ЗНАНИЙ (ИНТЕРАКТИВНЫЙ ТЕСТ) -->
+        <section id="tab-quiz" class="tab-content hidden space-y-6">
+            <div class="glass-panel p-6 sm:p-8 rounded-3xl max-w-3xl mx-auto space-y-6">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-4">
+                    <div>
+                        <span class="text-xs font-mono font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">Самопроверка</span>
+                        <h2 class="text-2xl font-extrabold text-slate-900 dark:text-white flex items-center gap-2 mt-1">
+                            <i class="fa-solid fa-clipboard-check text-cyan-500" aria-hidden="true"></i> Тест по архитектуре устройств
+                        </h2>
+                        <p id="quiz-stats-summary" class="text-xs text-slate-500 dark:text-slate-400 mt-1">Попыток: 0 • Лучший результат: —</p>
+                    </div>
+                    <div class="flex items-center gap-2.5">
+                        <span id="quiz-counter" class="px-3 py-1.5 rounded-xl bg-slate-200/80 dark:bg-slate-800 text-xs font-mono font-bold text-slate-700 dark:text-slate-200">Вопрос 1 / 10</span>
+                        <span id="quiz-score-badge" class="px-3 py-1.5 rounded-xl bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 text-xs font-mono font-bold">Баллы: 0</span>
+                    </div>
+                </div>
+
+                <div class="w-full h-2 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
+                    <div id="quiz-progress-bar" class="h-full bg-gradient-to-r from-cyan-500 to-emerald-400 transition-all duration-300" style="width: 10%"></div>
+                </div>
+
+                <div id="quiz-body" class="space-y-5">
+                    <div class="space-y-2">
+                        <span id="quiz-category" class="inline-block px-2.5 py-0.5 rounded-md text-[11px] font-semibold bg-cyan-500/15 text-cyan-700 dark:text-cyan-300">Категория</span>
+                        <h3 id="quiz-question" class="text-lg font-bold text-slate-900 dark:text-white leading-snug"></h3>
+                    </div>
+
+                    <div id="quiz-options" class="grid grid-cols-1 gap-3"></div>
+
+                    <div id="quiz-feedback" class="hidden p-4 rounded-xl border text-sm leading-relaxed"></div>
+
+                    <div class="flex items-center justify-between gap-3 pt-1">
+                        <button type="button" id="quiz-prev-btn" onclick="prevQuizQuestion()" class="px-4 py-2.5 rounded-xl bg-slate-200/80 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold text-sm transition-all flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed">
+                            <i class="fa-solid fa-arrow-left" aria-hidden="true"></i> <span>Предыдущий</span>
+                        </button>
+                        <button type="button" id="quiz-next-btn" onclick="nextQuizQuestion()" class="hidden px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-400 hover:to-teal-400 text-slate-950 font-bold text-sm shadow-lg shadow-cyan-500/20 transition-all flex items-center gap-2">
+                            <span>Следующий вопрос</span> <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div id="quiz-result" class="hidden space-y-6">
+                    <div class="text-center py-4 space-y-4">
+                        <div class="w-20 h-20 rounded-2xl bg-gradient-to-tr from-cyan-500 to-emerald-400 text-slate-950 flex items-center justify-center text-4xl mx-auto shadow-xl shadow-cyan-500/25">
+                            <i class="fa-solid fa-award" aria-hidden="true"></i>
+                        </div>
+                        <div class="space-y-1">
+                            <h3 id="quiz-result-title" class="text-2xl font-extrabold text-slate-900 dark:text-white">Отличный результат!</h3>
+                            <p id="quiz-result-subtitle" class="text-sm text-slate-600 dark:text-slate-400"></p>
+                        </div>
+                        <div class="flex flex-wrap items-center justify-center gap-3 pt-1">
+                            <button type="button" onclick="restartQuiz()" class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-teal-500 text-slate-950 font-bold text-sm shadow-md flex items-center gap-2">
+                                <i class="fa-solid fa-rotate-right" aria-hidden="true"></i> Пройти заново
+                            </button>
+                            <button type="button" onclick="switchTab('devices')" class="px-5 py-2.5 rounded-xl bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-semibold text-sm flex items-center gap-2">
+                                <i class="fa-solid fa-cubes" aria-hidden="true"></i> К 3D-моделям
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="space-y-3 border-t border-slate-200 dark:border-slate-800 pt-5">
+                        <h4 class="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                            <i class="fa-solid fa-list-check text-cyan-500" aria-hidden="true"></i> Сводка по всем вопросам
+                        </h4>
+                        <div id="quiz-review-list" class="space-y-2.5"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ВКЛАДКА 3: СПРАВОЧНИК И ДОКУМЕНТАЦИЯ -->
+        <section id="tab-guide" class="tab-content hidden space-y-6">
+            <div class="glass-panel p-6 sm:p-8 rounded-3xl space-y-6">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-4">
+                    <div>
+                        <h2 class="text-2xl font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                            <i class="fa-solid fa-circle-info text-cyan-500" aria-hidden="true"></i> О приложении и справочник
+                        </h2>
+                        <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Назначение, руководство пользователя, сброс настроек и документация проекта</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+                    <div class="p-5 rounded-2xl bg-slate-100/80 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 space-y-2.5">
+                        <div class="w-10 h-10 rounded-xl bg-cyan-500/15 text-cyan-600 dark:text-cyan-400 flex items-center justify-center text-lg">
+                            <i class="fa-solid fa-graduation-cap" aria-hidden="true"></i>
+                        </div>
+                        <h3 class="font-bold text-slate-900 dark:text-white text-base">Назначение</h3>
+                        <p class="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                            Интерактивный 3D-комплекс для изучения архитектуры современных вычислительных систем: персонального компьютера, ноутбука, стоечного сервера и одноплатного ПК.
+                        </p>
+                    </div>
+
+                    <div class="p-5 rounded-2xl bg-slate-100/80 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 space-y-2.5">
+                        <div class="w-10 h-10 rounded-xl bg-purple-500/15 text-purple-600 dark:text-purple-400 flex items-center justify-center text-lg">
+                            <i class="fa-solid fa-users" aria-hidden="true"></i>
+                        </div>
+                        <h3 class="font-bold text-slate-900 dark:text-white text-base">Аудитория</h3>
+                        <p class="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                            Студенты технических и IT-направлений, изучающие дисциплины «Архитектура ЭВМ» и «Аппаратное обеспечение», а также преподаватели информатики.
+                        </p>
+                    </div>
+
+                    <div class="p-5 rounded-2xl bg-slate-100/80 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 space-y-2.5">
+                        <div class="w-10 h-10 rounded-xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-lg">
+                            <i class="fa-solid fa-bullseye" aria-hidden="true"></i>
+                        </div>
+                        <h3 class="font-bold text-slate-900 dark:text-white text-base">Цель проекта</h3>
+                        <p class="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                            Наглядно показать внутреннее строение аппаратных узлов с помощью реалистичных GLB-моделей ПК, интерактивных взрыв-схем, 3D-аннотаций и проверки знаний.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="p-6 rounded-2xl bg-slate-100/80 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 space-y-4">
+                    <h3 class="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                        <i class="fa-solid fa-compass text-cyan-500" aria-hidden="true"></i> Как пользоваться комплексом
+                    </h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="flex gap-3">
+                            <span class="shrink-0 w-8 h-8 rounded-lg bg-cyan-500/15 text-cyan-600 dark:text-cyan-400 flex items-center justify-center font-bold text-sm">1</span>
+                            <div>
+                                <h4 class="text-sm font-bold text-slate-900 dark:text-white">Выберите устройство</h4>
+                                <p class="text-xs text-slate-600 dark:text-slate-400 mt-0.5">Откройте карточку ПК, ноутбука, сервера или одноплатного ПК (SBC).</p>
+                            </div>
+                        </div>
+                        <div class="flex gap-3">
+                            <span class="shrink-0 w-8 h-8 rounded-lg bg-cyan-500/15 text-cyan-600 dark:text-cyan-400 flex items-center justify-center font-bold text-sm">2</span>
+                            <div>
+                                <h4 class="text-sm font-bold text-slate-900 dark:text-white">Изучайте 3D-компоненты</h4>
+                                <p class="text-xs text-slate-600 dark:text-slate-400 mt-0.5">Для ПК используются GLB-модели, а для ноутбука, сервера и SBC доступны взрыв-схема, каркасный режим и 3D-метки.</p>
+                            </div>
+                        </div>
+                        <div class="flex gap-3">
+                            <span class="shrink-0 w-8 h-8 rounded-lg bg-cyan-500/15 text-cyan-600 dark:text-cyan-400 flex items-center justify-center font-bold text-sm">3</span>
+                            <div>
+                                <h4 class="text-sm font-bold text-slate-900 dark:text-white">Загружайте свои .GLB модели</h4>
+                                <p class="text-xs text-slate-600 dark:text-slate-400 mt-0.5">Нажмите иконку загрузки в панели инструментов, чтобы открыть любую локальную модель GLB/GLTF.</p>
+                            </div>
+                        </div>
+                        <div class="flex gap-3">
+                            <span class="shrink-0 w-8 h-8 rounded-lg bg-cyan-500/15 text-cyan-600 dark:text-cyan-400 flex items-center justify-center font-bold text-sm">4</span>
+                            <div>
+                                <h4 class="text-sm font-bold text-slate-900 dark:text-white">Пройдите тест</h4>
+                                <p class="text-xs text-slate-600 dark:text-slate-400 mt-0.5">Прогресс и лучший результат теста сохраняются автоматически, а в конце доступна полная сводка по вопросам.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="p-6 rounded-2xl bg-slate-100/80 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 space-y-4">
+                    <h3 class="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                        <i class="fa-solid fa-keyboard text-cyan-500" aria-hidden="true"></i> Управление и горячие клавиши
+                    </h3>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <div class="p-4 rounded-xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-center space-y-1.5">
+                            <i class="fa-solid fa-computer-mouse text-xl text-cyan-500" aria-hidden="true"></i>
+                            <p class="text-xs text-slate-900 dark:text-white font-bold">ЛКМ / Палец</p>
+                            <p class="text-[11px] text-slate-500 dark:text-slate-400">Вращение 3D-модели</p>
+                        </div>
+                        <div class="p-4 rounded-xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-center space-y-1.5">
+                            <i class="fa-solid fa-magnifying-glass text-xl text-cyan-500" aria-hidden="true"></i>
+                            <p class="text-xs text-slate-900 dark:text-white font-bold">Колесико / +/-</p>
+                            <p class="text-[11px] text-slate-500 dark:text-slate-400">Плавный зум камеры</p>
+                        </div>
+                        <div class="p-4 rounded-xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-center space-y-1.5">
+                            <span class="inline-block px-2 py-0.5 rounded bg-cyan-500/15 text-cyan-600 dark:text-cyan-400 font-mono text-xs font-bold">Space / R</span>
+                            <p class="text-xs text-slate-900 dark:text-white font-bold">Вращение / Сброс</p>
+                            <p class="text-[11px] text-slate-500 dark:text-slate-400">Быстрое управление</p>
+                        </div>
+                        <div class="p-4 rounded-xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-center space-y-1.5">
+                            <span class="inline-block px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-mono text-xs font-bold">E</span>
+                            <p class="text-xs text-slate-900 dark:text-white font-bold">Взрыв-схема</p>
+                            <p class="text-[11px] text-slate-500 dark:text-slate-400">Разобрать / собрать (3D)</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="p-6 rounded-2xl bg-slate-100/80 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 space-y-4">
+                    <h3 class="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                        <i class="fa-solid fa-code text-purple-500" aria-hidden="true"></i> Документация проекта (запуск и расширение)
+                    </h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                        <div class="p-4 rounded-xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-2">
+                            <h4 class="font-bold text-slate-900 dark:text-white">Локальный запуск с GLB-моделями ПК</h4>
+                            <p>Браузеры блокируют загрузку локальных <code class="font-mono text-cyan-600 dark:text-cyan-400">.glb</code> по протоколу <code class="font-mono">file://</code>. Поместите модели ПК в папку <code class="font-mono text-cyan-600 dark:text-cyan-400">assets/models/</code> рядом с HTML-файлом и запустите локальный сервер:</p>
+                            <pre class="p-2.5 rounded-lg bg-slate-100 dark:bg-slate-900 font-mono text-[11px] overflow-x-auto text-slate-800 dark:text-cyan-300">python -m http.server 8000
+# или расширение VS Code: Live Server</pre>
+                            <p class="text-[11px] text-slate-500 dark:text-slate-400">Ожидаемые файлы ПК: <code class="font-mono">md.glb, pro.glb, mat.glb, ddr.glb, vid.glb, block.glb, ssd.glb, cooler.glb</code>.</p>
+                        </div>
+                        <div class="p-4 rounded-xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-2">
+                            <h4 class="font-bold text-slate-900 dark:text-white">Добавление новых устройств и моделей</h4>
+                            <ul class="list-disc pl-4 space-y-1.5">
+                                <li>Опишите устройство и его компоненты в константе <code class="font-mono text-cyan-600 dark:text-cyan-400">devicesData</code>.</li>
+                                <li>Для GLB-устройств укажите <code class="font-mono">rendererType: 'glb'</code> и поле <code class="font-mono">model</code> у каждого компонента.</li>
+                                <li>Для Three.js укажите <code class="font-mono">rendererType: 'three'</code> и добавьте отдельный билдер в модуле генерации 3D-сцен.</li>
+                                <li>При подготовке новых GLB в Blender: применяйте Scale (Ctrl+A), центрируйте Origin, сжимайте текстуры (Draco/WebP) до 2–5 МБ.</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="p-5 rounded-2xl bg-rose-500/5 border border-rose-500/25 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                        <h3 class="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                            <i class="fa-solid fa-trash-can text-rose-500" aria-hidden="true"></i> Сброс всех настроек
+                        </h3>
+                        <p class="text-xs text-slate-600 dark:text-slate-400 mt-0.5">Сбросит выбранную тему (вернёт тёмную), прогресс изученных 3D-компонентов и сохранённые результаты теста.</p>
+                    </div>
+                    <div id="reset-all-actions" class="flex items-center gap-2 shrink-0">
+                        <button type="button" id="btn-reset-all-trigger" onclick="showResetAllConfirm(true)" class="px-4 py-2 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-700 dark:text-rose-300 border border-rose-500/30 text-xs font-bold transition-colors">
+                            Сбросить всё
+                        </button>
+                        <div id="reset-all-confirm-box" class="hidden flex items-center gap-2">
+                            <span class="text-xs font-semibold text-rose-600 dark:text-rose-400">Точно сбросить?</span>
+                            <button type="button" onclick="confirmResetAllSettings()" class="px-3 py-1.5 rounded-lg bg-rose-500 hover:bg-rose-600 text-white text-xs font-bold">Да</button>
+                            <button type="button" onclick="showResetAllConfirm(false)" class="px-3 py-1.5 rounded-lg bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-semibold">Отмена</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- ПОДВАЛ (Footer) -->
+    <footer class="glass-panel border-t border-slate-200/80 dark:border-slate-800/80 py-6 px-4 text-center mt-10">
+        <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-slate-500 dark:text-slate-400">
+            <div class="flex items-center gap-2">
+                <i class="fa-solid fa-graduation-cap text-cyan-500 text-base" aria-hidden="true"></i>
+                <span class="font-bold text-slate-800 dark:text-slate-200">Тувинский государственный университет</span>
+            </div>
+            <div>
+                <span>Учебное пособие по направлению «Архитектура Вычислительных Систем»</span>
+            </div>
+            <div class="flex items-center gap-2 font-mono">
+                <i class="fa-solid fa-envelope text-cyan-500" aria-hidden="true"></i>
+                <a href="mailto:1_tuva_1@mail.ru" class="hover:text-cyan-600 dark:hover:text-cyan-300 transition-colors">1_tuva_1@mail.ru</a>
+            </div>
+        </div>
+    </footer>
+
+    <!-- ЛОГИКА ПРИЛОЖЕНИЯ -->
+    <script>
+        /* ============================================================
+           КОНСТАНТЫ И НАСТРОЙКИ
+           ============================================================ */
+        const STORAGE_VERSION = 2;
+        const STORAGE_KEY_PROGRESS = 'arch3d_progress_v2';
+        const STORAGE_KEY_QUIZ = 'arch3d_quiz_v2';
+        const STORAGE_KEY_THEME = 'arch3d_theme';
+        const MODEL_PATH = 'assets/models/';
+
+        const DEVICE_COLOR_STYLES = {
+            cyan: {
+                box: 'bg-cyan-500/15 border-cyan-500/30 text-cyan-600 dark:text-cyan-400',
+                hover: 'hover:border-cyan-500/60',
+                link: 'text-cyan-600 dark:text-cyan-400',
+                bar: 'from-cyan-500 to-teal-400'
+            },
+            emerald: {
+                box: 'bg-emerald-500/15 border-emerald-500/30 text-emerald-600 dark:text-emerald-400',
+                hover: 'hover:border-emerald-500/60',
+                link: 'text-emerald-600 dark:text-emerald-400',
+                bar: 'from-emerald-500 to-cyan-400'
+            },
+            amber: {
+                box: 'bg-amber-500/15 border-amber-500/30 text-amber-600 dark:text-amber-400',
+                hover: 'hover:border-amber-500/60',
+                link: 'text-amber-600 dark:text-amber-400',
+                bar: 'from-amber-500 to-orange-400'
+            },
+            rose: {
+                box: 'bg-rose-500/15 border-rose-500/30 text-rose-600 dark:text-rose-400',
+                hover: 'hover:border-rose-500/60',
+                link: 'text-rose-600 dark:text-rose-400',
+                bar: 'from-rose-500 to-pink-400'
+            }
+        };
+
+        /* ============================================================
+           БАЗА ДАННЫХ УСТРОЙСТВ
+           ============================================================ */
+        const devicesData = {
+            pc: {
+                name: "Персональный компьютер",
+                shortName: "ПК",
+                category: "Десктоп • x86-64 • GLB 3D",
+                accent: "cyan",
+                icon: "fa-desktop",
+                rendererType: "glb",
+                supportsExplode: false,
+                summary: "Классическая модульная архитектура системного блока на базе ваших 3D GLB-моделей: процессор, плата, ОЗУ, GPU, БП, SSD и кулер.",
+                components: {
+                    main: {
+                        title: "Общая сборка ПК",
+                        shortLabel: "Сборка",
+                        type: "Системный блок",
+                        icon: "fa-desktop",
+                        model: MODEL_PATH + "md.glb",
+                        desc: "Полнофункциональный системный блок в сборе. Включает материнскую плату, центральный процессор с охлаждением, модули оперативной памяти, видеокарту и блок питания.",
+                        specs: [
+                            { k: "Форм-фактор", v: "Midi-Tower ATX" },
+                            { k: "Охлаждение", v: "Направленный поток" },
+                            { k: "Питание", v: "650–1000 Вт" },
+                            { k: "Модульность", v: "Полный апгрейд" }
+                        ],
+                        bus: "Системная шина PCIe, каналы ОЗУ и линии питания +12V/+5V/+3.3V объединяют все узлы внутри шасси.",
+                        fact: "Организация воздушного потока (приток спереди, выдув сзади и сверху) снижает температуру GPU на 8–12 °C."
+                    },
+                    cpu: {
+                        title: "Центральный процессор (CPU)",
+                        shortLabel: "ЦП",
+                        type: "Вычислительное ядро",
+                        icon: "fa-microchip",
+                        model: MODEL_PATH + "pro.glb",
+                        desc: "Главный микрочип ПК, отвечающий за выполнение всех арифметических, логических и управляющих инструкций программного кода.",
+                        specs: [
+                            { k: "Техпроцесс", v: "3–5 нм FinFET" },
+                            { k: "Ядра / Потоки", v: "8–24 / 16–32" },
+                            { k: "Кэш L3", v: "32–96 МБ" },
+                            { k: "Частота", v: "до 5.8 ГГц" }
+                        ],
+                        bus: "Напрямую связан с оперативной памятью (встроенный контроллер) и видеокартой (линии PCIe), а с периферией — через чипсет.",
+                        fact: "Металлическая крышка IHS защищает хрупкий кремниевый кристалл и равномерно распределяет тепло на основание кулера."
+                    },
+                    motherboard: {
+                        title: "Материнская плата",
+                        shortLabel: "Плата",
+                        type: "Системная магистраль",
+                        icon: "fa-chess-board",
+                        model: MODEL_PATH + "mat.glb",
+                        desc: "Главная многослойная печатная плата компьютера. Объединяет процессор, ОЗУ, слоты расширения PCIe, чипсет и контроллеры ввода-вывода в единую магистраль.",
+                        specs: [
+                            { k: "Формат", v: "ATX (305×244 мм)" },
+                            { k: "Слоты ОЗУ", v: "4× DDR5 DIMM" },
+                            { k: "Расширение", v: "PCIe 5.0 x16" },
+                            { k: "Питание", v: "24-pin + 8-pin" }
+                        ],
+                        bus: "Разводит высокоскоростные дифференциальные пары данных одинаковой длины, чтобы сигналы приходили синхронно.",
+                        fact: "Зигзагообразные медные дорожки («змейки») на плате выравнивают задержку сигналов с точностью до пикосекунд."
+                    },
+                    ram: {
+                        title: "Оперативная память (RAM)",
+                        shortLabel: "ОЗУ",
+                        type: "Энергозависимая память",
+                        icon: "fa-memory",
+                        model: MODEL_PATH + "ddr.glb",
+                        desc: "Быстрое энергозависимое запоминающее устройство. Используется процессором для временного хранения исполняемых программ и текущих данных.",
+                        specs: [
+                            { k: "Стандарт", v: "DDR5 SDRAM" },
+                            { k: "Скорость", v: "5600–7200 МТ/с" },
+                            { k: "Напряжение", v: "1.1 В (PMIC)" },
+                            { k: "Объём модуля", v: "16–48 ГБ" }
+                        ],
+                        bus: "Подключается напрямую к контроллеру памяти CPU; двухканальный режим удваивает пропускную способность.",
+                        fact: "В стандарте DDR5 микросхема управления питанием (PMIC) перенесена с материнской платы прямо на сам модуль ОЗУ."
+                    },
+                    gpu: {
+                        title: "Видеокарта (GPU)",
+                        shortLabel: "GPU",
+                        type: "Графический ускоритель",
+                        icon: "fa-video",
+                        model: MODEL_PATH + "vid.glb",
+                        desc: "Специализированная плата с собственным массивно-параллельным процессором и видеопамятью GDDR6X. Предназначена для 3D-рендеринга, вычислений ИИ и вывода изображения.",
+                        specs: [
+                            { k: "Память", v: "12–24 ГБ GDDR6X" },
+                            { k: "Шина памяти", v: "192–384 бит" },
+                            { k: "Интерфейс", v: "PCIe 4.0/5.0 x16" },
+                            { k: "Теплопакет", v: "200–450 Вт" }
+                        ],
+                        bus: "Получает геометрию и команды от ЦП по шине PCIe x16 и выводит готовый кадр через DisplayPort или HDMI.",
+                        fact: "Видеокарта фактически является отдельным компьютером внутри ПК — со своим процессором, памятью, BIOS и системой питания."
+                    },
+                    psu: {
+                        title: "Блок питания (PSU)",
+                        shortLabel: "БП",
+                        type: "Подсистема питания",
+                        icon: "fa-plug",
+                        model: MODEL_PATH + "block.glb",
+                        desc: "Импульсный преобразователь, переводящий переменный ток сети (220V) в стабилизированный постоянный ток линий +12V, +5V и +3.3V для питания компонентов ПК.",
+                        specs: [
+                            { k: "КПД", v: "80 PLUS Gold (~90%)" },
+                            { k: "Линия +12V", v: "до 95% мощности" },
+                            { k: "Кабели", v: "Модульные" },
+                            { k: "Защиты", v: "OVP / OCP / SCP" }
+                        ],
+                        bus: "Питает материнскую плату, процессор, видеокарту и накопители через стандартизированные силовые разъёмы.",
+                        fact: "Сертификат 80 PLUS отражает КПД: чем он выше, тем меньше энергии из розетки теряется в виде нагрева самого блока."
+                    },
+                    ssd: {
+                        title: "SSD Накопитель",
+                        shortLabel: "SSD",
+                        type: "Энергонезависимая память",
+                        icon: "fa-hard-drive",
+                        model: MODEL_PATH + "ssd.glb",
+                        desc: "Твердотельный накопитель на микросхемах флеш-памяти 3D NAND. Обеспечивает мгновенную загрузку ОС и программ без механических задержек.",
+                        specs: [
+                            { k: "Форм-фактор", v: "M.2 2280 / 2.5\"" },
+                            { k: "Чтение", v: "до 7400 МБ/с" },
+                            { k: "Память", v: "3D TLC NAND" },
+                            { k: "Протокол", v: "NVMe (PCIe 4.0 x4)" }
+                        ],
+                        bus: "Работает напрямую по линиям PCIe, обеспечивая задержки в десятки микросекунд вместо миллисекунд у HDD.",
+                        fact: "Отсутствие вращающихся магнитных дисков делает SSD бесшумным, компактным и устойчивым к вибрациям."
+                    },
+                    cooler: {
+                        title: "Система охлаждения",
+                        shortLabel: "Кулер",
+                        type: "Терморегуляция",
+                        icon: "fa-fan",
+                        model: MODEL_PATH + "cooler.glb",
+                        desc: "Воздушный кулер с медными тепловыми трубками и алюминиевым радиатором. Эффективно отводит тепло от процессора, предотвращая троттлинг.",
+                        specs: [
+                            { k: "Теплотрубки", v: "4–6× Ø6 мм (медь)" },
+                            { k: "Рассеивание", v: "до 220 Вт TDP" },
+                            { k: "Вентилятор", v: "120 мм PWM" },
+                            { k: "Шум", v: "18–28 дБА" }
+                        ],
+                        bus: "Управляется материнской платой по 4-контактному сигналу ШИМ (PWM) по данным термодатчика ЦП.",
+                        fact: "Внутри герметичной трубки тепло переносится за счёт испарения и конденсации рабочей жидкости (фазовый переход)."
+                    }
+                }
+            },
+            laptop: {
+                name: "Ноутбук",
+                shortName: "Ноутбук",
+                category: "Мобильный ПК • Ультрабук",
+                accent: "emerald",
+                icon: "fa-laptop",
+                rendererType: "three",
+                supportsExplode: true,
+                summary: "Сверхплотная мобильная компоновка: корпус со скульптурной клавиатурой, двухтурбинное охлаждение, BGA-плата и Li-Po батарея.",
+                components: {
+                    main: {
+                        title: "Общий вид ноутбука",
+                        shortLabel: "Корпус",
+                        type: "Портативный ПК",
+                        icon: "fa-laptop",
+                        desc: "Компактное устройство, объединяющее тонкорамочный дисплей, клавиатуру, тачпад, литий-полимерную батарею и системную плату в алюминиевом корпусе.",
+                        specs: [
+                            { k: "Толщина", v: "14–19 мм" },
+                            { k: "Энергопакет", v: "15–65 Вт TDP" },
+                            { k: "Автономность", v: "8–15 часов" },
+                            { k: "Масса", v: "1.3–2.1 кг" }
+                        ],
+                        bus: "Матрица подключена по внутреннему шлейфу eDP, клавиатура — через контроллер EC, внешние устройства — по USB4 / Thunderbolt.",
+                        fact: "Потяните ползунок «Разборка», чтобы поднять топкейс с клавиатурой и рассмотреть плотную компоновку батареи, платы и теплотрубок."
+                    },
+                    cooling: {
+                        title: "Система охлаждения ноутбука",
+                        shortLabel: "Охлаждение",
+                        type: "Терморегуляция",
+                        icon: "fa-fan",
+                        desc: "Низкопрофильный контур из изогнутых медных тепловых трубок, пластинчатых радиаторов и двух центробежных вентиляторов-турбин.",
+                        specs: [
+                            { k: "Вентиляторы", v: "2× радиальные турбины" },
+                            { k: "Зона отвода", v: "CPU + GPU + VRM" },
+                            { k: "Трубки", v: "Плоская медь 2–3 мм" },
+                            { k: "Выдув", v: "Боковые и тыльные рёбра" }
+                        ],
+                        bus: "Скорость турбин регулируется встроенным микроконтроллером (EC) на основе телеметрии температурных датчиков.",
+                        fact: "Радиальные турбины создают высокое статическое давление, чтобы продуть воздух сквозь узкие рёбра радиатора толщиной всего 5–7 мм."
+                    },
+                    mobo_laptop: {
+                        title: "Системная плата ноутбука",
+                        shortLabel: "Плата",
+                        type: "Мобильная архитектура",
+                        icon: "fa-chess-board",
+                        desc: "Сверхплотная плата с распаянными BGA-чипами CPU/GPU, модулем SO-DIMM, слотом M.2 NVMe, радиомодулем Wi-Fi 6E и портами USB-C PD.",
+                        specs: [
+                            { k: "Монтаж CPU", v: "BGA (прямой контакт)" },
+                            { k: "ОЗУ", v: "SO-DIMM / LPDDR5" },
+                            { k: "Накопитель", v: "M.2 2280 NVMe" },
+                            { k: "Порты", v: "USB4, HDMI, Audio" }
+                        ],
+                        bus: "Максимально короткие печатные дорожки снижают паразитную ёмкость и уменьшают энергопотребление от аккумулятора.",
+                        fact: "У мобильных процессоров отсутствует толстая крышка IHS — медный теплосъёмник контактирует прямо с кремниевым кристаллом."
+                    },
+                    battery: {
+                        title: "Аккумуляторная батарея",
+                        shortLabel: "Батарея",
+                        type: "Автономное питание",
+                        icon: "fa-battery-full",
+                        desc: "Четырёхсекционная литий-полимерная (Li-Po) батарея в мягких фольгированных пакетах с контроллером балансировки и защиты BMS.",
+                        specs: [
+                            { k: "Ёмкость", v: "56–99 Вт·ч" },
+                            { k: "Ячейки", v: "4S Li-Polymer" },
+                            { k: "Напряжение", v: "15.4 В номинал" },
+                            { k: "Ресурс", v: "800–1000 циклов" }
+                        ],
+                        bus: "Передаёт данные о заряде, напряжении каждой ячейки и степени износа материнской плате по шине SMBus / I2C.",
+                        fact: "Ёмкость батареи ноутбука не превышает 99.9 Вт·ч из-за международных правил авиационной безопасности для ручной клади."
+                    }
+                }
+            },
+            server: {
+                name: "Сервер (1U Rack)",
+                shortName: "Сервер",
+                category: "Дата-центр • Enterprise",
+                accent: "amber",
+                icon: "fa-server",
+                rendererType: "three",
+                supportsExplode: true,
+                summary: "Отказоустойчивая стоечная архитектура: два процессора, память ECC, корзина Hot-Swap RAID и резервируемые БП 1+1.",
+                components: {
+                    main: {
+                        title: "Серверное шасси 1U",
+                        shortLabel: "Шасси 1U",
+                        type: "Стоечный сервер",
+                        icon: "fa-server",
+                        desc: "Сервер высотой 1 юнит (44.45 мм) для 19-дюймовых стоек ЦОД. Оснащён ушками крепления, корзиной дисков горячей замены и туннельным охлаждением.",
+                        specs: [
+                            { k: "Высота", v: "1U (44.45 мм)" },
+                            { k: "Продувка", v: "6× турбин 40 мм" },
+                            { k: "Корзина", v: "8× Hot-Swap 2.5\"" },
+                            { k: "Контроль", v: "BMC / IPMI 2.0" }
+                        ],
+                        bus: "Холодный воздух из «холодного коридора» ЦОД проходит насквозь от дисков через ряд турбин и пассивные радиаторы ЦП к задней стенке.",
+                        fact: "Отдельный микрокомпьютер BMC внутри сервера позволяет администратору удалённо включать сервер и управлять BIOS даже без установленной ОС."
+                    },
+                    dual_cpu: {
+                        title: "Двухпроцессорная плата",
+                        shortLabel: "Dual CPU",
+                        type: "Вычислительный узел",
+                        icon: "fa-microchip",
+                        desc: "Платформа NUMA с двумя процессорными сокетами, ребристыми медными радиаторами и 12 слотами регистровой памяти ECC DDR5.",
+                        specs: [
+                            { k: "Топология", v: "NUMA (2 сокета)" },
+                            { k: "Память", v: "DDR5 RDIMM ECC" },
+                            { k: "Шина ЦП", v: "UPI / xGMI" },
+                            { k: "Линии PCIe", v: "до 160 линий" }
+                        ],
+                        bus: "Процессоры имеют локальные каналы памяти и обмениваются когерентными данными по выделенной высокоскоростной шине.",
+                        fact: "Память ECC хранит дополнительные биты чётности (код Хэмминга) и автоматически исправляет одиночные битовые ошибки на лету."
+                    },
+                    raid: {
+                        title: "RAID-массив накопителей",
+                        shortLabel: "RAID",
+                        type: "Подсистема хранения",
+                        icon: "fa-database",
+                        desc: "Корпоративные диски SAS/NVMe в быстросъёмных салазках с индикацией статуса, подключённые к общей объединительной плате Backplane.",
+                        specs: [
+                            { k: "Уровни", v: "RAID 1 / 5 / 6 / 10" },
+                            { k: "Интерфейс", v: "SAS 12G / U.2 NVMe" },
+                            { k: "Плата", v: "SAS/NVMe Backplane" },
+                            { k: "Замена", v: "Hot-Swap (на ходу)" }
+                        ],
+                        bus: "Backplane распределяет питание и сигналы данных между RAID-контроллером и каждым дисковым отсеком.",
+                        fact: "В массиве RAID 10 выход из строя одного накопителя не прерывает работу сервиса — данные мгновенно считываются с зеркала."
+                    },
+                    redundant_psu: {
+                        title: "Резервируемые БП (1+1)",
+                        shortLabel: "БП 1+1",
+                        type: "Отказоустойчивое питание",
+                        icon: "fa-bolt",
+                        desc: "Два независимых выдвижных блока питания в общей корзине. Подключаются к разным силовым вводам ЦОД и поддерживают горячую замену.",
+                        specs: [
+                            { k: "Схема", v: "1+1 Redundant" },
+                            { k: "КПД", v: "80 PLUS Titanium (96%)" },
+                            { k: "Замена", v: "Hot-Plug (без простоя)" },
+                            { k: "Мощность", v: "2× 800–1600 Вт" }
+                        ],
+                        bus: "Через силовые ножевые контакты подают единую линию +12V на плату распределения питания (PDB).",
+                        fact: "В штатном режиме оба БП делят нагрузку 50/50 — именно при 50% загрузке импульсные блоки показывают максимальный КПД."
+                    }
+                }
+            },
+            sbc: {
+                name: "Одноплатный ПК (SBC)",
+                shortName: "SBC / RPi",
+                category: "Embedded • IoT и робототехника",
+                accent: "rose",
+                icon: "fa-microchip",
+                rendererType: "three",
+                supportsExplode: true,
+                summary: "Компьютер размером с банковскую карту: ARM SoC, радиомодуль Wi-Fi/BT, 40-пиновый GPIO, Ethernet, USB 3.0 и разъёмы CSI/DSI.",
+                components: {
+                    main: {
+                        title: "Одноплатный компьютер",
+                        shortLabel: "Плата SBC",
+                        type: "Встраиваемая система",
+                        icon: "fa-microchip",
+                        desc: "Полноценный мини-компьютер класса Raspberry Pi на одной компактной плате с ARM-процессором, памятью, сетью, видеовыходами и интерфейсом GPIO.",
+                        specs: [
+                            { k: "Габариты", v: "85 × 56 мм" },
+                            { k: "ОС", v: "Linux (ARM64)" },
+                            { k: "Питание", v: "5 В / 3–5 А (USB-C)" },
+                            { k: "Накопитель", v: "microSD / PCIe FFC" }
+                        ],
+                        bus: "ARM SoC напрямую обслуживает шины PCIe, USB, Gigabit Ethernet, micro-HDMI, камерный CSI и 40 контактов GPIO.",
+                        fact: "При энергопотреблении 5–10 Вт (меньше настольной лампы) одноплатный ПК запускает веб-серверы, роботов и системы умного дома."
+                    },
+                    arm_soc: {
+                        title: "Процессор ARM SoC",
+                        shortLabel: "ARM SoC",
+                        type: "RISC-архитектура",
+                        icon: "fa-microchip",
+                        desc: "Энергоэффективная система на кристалле с архитектурой RISC (ARM64), объединяющая вычислительные ядра Cortex-A, графику и контроллеры интерфейсов.",
+                        specs: [
+                            { k: "Ядра", v: "4× ARM Cortex-A76" },
+                            { k: "ISA", v: "ARMv8.2 (RISC)" },
+                            { k: "Графика", v: "Интегрированный GPU" },
+                            { k: "Теплопакет", v: "5–8 Вт" }
+                        ],
+                        bus: "Внутренняя межсоединительная шина связывает ядра CPU, GPU, видеодекодер и контроллеры I2C/SPI/UART.",
+                        fact: "Благодаря упрощённому декодеру инструкций RISC, ARM-процессоры обладают высокой производительностью на ватт энергии."
+                    },
+                    gpio: {
+                        title: "Интерфейс GPIO (40-pin)",
+                        shortLabel: "GPIO",
+                        type: "Ввод-вывод / Датчики",
+                        icon: "fa-sliders",
+                        desc: "Двухрядная гребёнка из 40 программируемых контактов для связи с датчиками, реле, сервоприводами и внешними микроконтроллерами.",
+                        specs: [
+                            { k: "Контакты", v: "40 (шаг 2.54 мм)" },
+                            { k: "Логика", v: "3.3 В (не 5 В!)" },
+                            { k: "Протоколы", v: "I2C, SPI, UART, PWM" },
+                            { k: "Питание", v: "Линии 3.3В, 5В, GND" }
+                        ],
+                        bus: "Пины подключены к внутреннему мультиплексору SoC, что позволяет программно переназначать их функции.",
+                        fact: "Подача напряжения 5 В на сигнальный вход GPIO с логикой 3.3 В без преобразователя уровней может вывести контроллер из строя."
+                    }
+                }
+            }
+        };
+
+        /* ============================================================
+           ВОПРОСЫ ТЕСТА
+           ============================================================ */
+        const quizQuestions = [
+            {
+                category: "Персональный компьютер",
+                q: "Какой компонент объединяет процессор, ОЗУ, видеокарту и периферию в единую системную магистраль?",
+                options: ["Блок питания (PSU)", "Материнская плата", "Башенный кулер", "Твердотельный накопитель SSD"],
+                answer: 1,
+                explanation: "Материнская плата разводит высокоскоростные шины данных (PCIe, каналы ОЗУ) и линии питания между всеми компонентами ПК."
+            },
+            {
+                category: "Память",
+                q: "В чём главное отличие оперативной памяти (RAM) от SSD-накопителя?",
+                options: [
+                    "RAM энергозависима и обеспечивает гораздо меньшие задержки, чем SSD",
+                    "SSD хранит данные только пока включён компьютер",
+                    "RAM используется исключительно для вывода звука",
+                    "SSD заменяет центральный процессор при расчётах"
+                ],
+                answer: 0,
+                explanation: "Оперативная память очищается при отключении питания, но обеспечивает минимальные задержки для текущей работы ЦП, а SSD хранит данные постоянно."
+            },
+            {
+                category: "Ноутбук",
+                q: "Почему ёмкость аккумулятора ноутбуков почти никогда не превышает 99.9 Вт·ч?",
+                options: [
+                    "Литий-полимерные ячейки физически не соединяются выше 100 Вт·ч",
+                    "Это ограничение международных правил авиаперевозок для ручной клади",
+                    "Операционная система не умеет отображать больше 99 Вт·ч",
+                    "Из-за ограничений интерфейса USB-C"
+                ],
+                answer: 1,
+                explanation: "Правила авиационной безопасности разрешают провозить в салоне самолёта литиевые батареи ёмкостью не более 100 Вт·ч."
+            },
+            {
+                category: "Ноутбук",
+                q: "Зачем в системе охлаждения ноутбуков вместо обычных осевых кулеров применяют радиальные вентиляторы (турбины)?",
+                options: [
+                    "Они создают высокое статическое давление для продувки узких рёбер в тонком корпусе",
+                    "Они работают вообще без электричества",
+                    "Они нужны только для охлаждения экрана",
+                    "Они полностью заменяют медные тепловые трубки"
+                ],
+                answer: 0,
+                explanation: "Радиальная турбина забирает воздух снизу и с высоким давлением выталкивает его вбок сквозь узкий и плотный радиатор."
+            },
+            {
+                category: "Серверы",
+                q: "Зачем в стоечных серверах применяется оперативная память стандарта ECC?",
+                options: [
+                    "Для декоративной подсветки внутри серверной стойки",
+                    "Для автоматического обнаружения и исправления битовых ошибок на лету",
+                    "Чтобы снизить стоимость сервера в два раза",
+                    "Для подключения монитора без видеокарты"
+                ],
+                answer: 1,
+                explanation: "ECC (Error-Correcting Code) хранит контрольные биты Хэмминга и на лету исправляет случайные сбои памяти, защищая базы данных от падений."
+            },
+            {
+                category: "Охлаждение",
+                q: "Какой физический принцип лежит в основе работы медных тепловых трубок кулеров?",
+                options: [
+                    "Электромагнитная индукция",
+                    "Испарение жидкости в горячей зоне и конденсация в холодной (фазовый переход)",
+                    "Охлаждение сжатым азотом из баллона",
+                    "Сверхпроводимость меди при комнатной температуре"
+                ],
+                answer: 1,
+                explanation: "Внутри герметичной трубки под пониженным давлением находится рабочая жидкость: испаряясь у ЦП, пар мгновенно переносит тепло к рёбрам радиатора."
+            },
+            {
+                category: "Одноплатный ПК",
+                q: "Для чего на одноплатных компьютерах (Raspberry Pi и аналогах) нужен 40-контактный разъём GPIO?",
+                options: [
+                    "Для установки настольной игровой видеокарты",
+                    "Для подключения внешних датчиков, реле, светодиодов и шин I2C/SPI/UART",
+                    "Только для подключения питания 220 В",
+                    "Для расширения объёма оперативной памяти"
+                ],
+                answer: 1,
+                explanation: "GPIO (General-Purpose Input/Output) — программируемые контакты ввода-вывода, связывающие одноплатный компьютер с внешней электроникой."
+            },
+            {
+                category: "Серверы",
+                q: "Как работает схема резервирования блоков питания «1+1» в стоечном сервере?",
+                options: [
+                    "Второй блок включается вручную тумблером на следующий день",
+                    "При отказе одного БП второй мгновенно берёт 100% нагрузки без перезагрузки",
+                    "Один блок питает только сеть, второй — только вентиляторы",
+                    "Оба блока обязательно должны быть разной мощности"
+                ],
+                answer: 1,
+                explanation: "Резервируемые блоки поддерживают «горячую замену» (Hot-Plug) и обеспечивают непрерывную работу сервера 24/7."
+            },
+            {
+                category: "Серверы и хранение",
+                q: "Какую роль выполняет плата Backplane в серверной дисковой корзине RAID?",
+                options: [
+                    "Охлаждает центральные процессоры жидким металлом",
+                    "Объединяет разъёмы питания и шины SAS/NVMe для горячей замены дисков без кабелей",
+                    "Преобразует переменный ток 220 В в постоянный",
+                    "Хранит операционную систему вместо накопителей"
+                ],
+                answer: 1,
+                explanation: "Объединительная плата Backplane позволяет извлекать и вставлять диски в салазках прямо во время работы сервера."
+            },
+            {
+                category: "Графика и вычисления",
+                q: "Почему видеокарты (GPU) особенно эффективны для 3D-рендеринга и обучения нейросетей?",
+                options: [
+                    "У них выше тактовая частота одного ядра, чем у CPU",
+                    "Они содержат тысячи параллельных вычислительных ядер для матричных операций",
+                    "Они работают напрямую от бытовой сети 220 В",
+                    "В них отсутствует оперативная память"
+                ],
+                answer: 1,
+                explanation: "GPU спроектирован для одновременного выполнения тысяч однотипных математических операций над векторами, пикселями и матрицами."
+            }
+        ];
+
+        /* ============================================================
+           ГЛОБАЛЬНОЕ СОСТОЯНИЕ И КЭШ
+           ============================================================ */
+        const TOTAL_COMPONENTS_COUNT = Object.values(devicesData)
+            .reduce((sum, dev) => sum + Object.keys(dev.components).length, 0);
+
+        let currentDeviceId = 'pc';
+        let currentComponentKey = 'main';
+        let activeViewerMode = 'glb';
+        let isAutoRotating = true;
+        let showHotspots = true;
+        let isWireframe = false;
+        let targetExplode = 0;
+        let currentExplode = 0;
+        let customGLBUrl = null;
+        let visitedComponents = new Set();
+        let searchDebounceTimer = null;
+
+        let quizState = {
+            index: 0,
+            answers: Array(quizQuestions.length).fill(null),
+            finished: false,
+            bestScore: null,
+            attempts: 0
+        };
+
+        let webglAvailable = true;
+        let scene, camera, renderer, modelGroup, gridHelper, clock;
+        let hemiLight, keyLight, fillLight;
+        let spinObjects = [];
+        let activeHotspotsData = [];
+        let animFrameId = null;
+
+        let camTheta = 0.65;
+        let camPhi = 1.12;
+        let camRadius = 5.3;
+        let targetTheta = 0.65;
+        let targetPhi = 1.12;
+        let targetRadius = 5.3;
+        let activeZoomDir = 0;
+        let isPointerDown = false;
+        let prevPointer = { x: 0, y: 0 };
+        let pinchStartDist = 0;
+        let pinchStartRadius = 5.3;
+
+        const textureCache = {};
+        const materialCache = new Map();
+
+        /* ============================================================
+           УВЕДОМЛЕНИЯ, ХРАНИЛИЩЕ С ВЕРСИЕЙ И ТЕМА
+           ============================================================ */
+        function showToast(message, icon = 'fa-circle-info', colorClass = 'text-cyan-500') {
+            const container = document.getElementById('toast-container');
+            if (!container) return;
+            const toast = document.createElement('div');
+            toast.className = 'pointer-events-auto flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-white/95 dark:bg-slate-900/95 border border-slate-200 dark:border-slate-700 shadow-xl text-xs font-semibold text-slate-800 dark:text-slate-100 transition-all duration-300 translate-y-2 opacity-0';
+            toast.innerHTML = `<i class="fa-solid ${icon} ${colorClass} text-sm" aria-hidden="true"></i><span>${message}</span>`;
+            container.appendChild(toast);
+            requestAnimationFrame(() => toast.classList.remove('translate-y-2', 'opacity-0'));
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 2600);
+        }
+
+        function isValidComponentId(id) {
+            const [devId, compKey] = String(id).split(':');
+            return Boolean(devicesData[devId] && devicesData[devId].components[compKey]);
+        }
+
+        function loadStudyProgress() {
+            try {
+                const raw = localStorage.getItem(STORAGE_KEY_PROGRESS);
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    if (parsed && parsed.version === STORAGE_VERSION && Array.isArray(parsed.visited)) {
+                        visitedComponents = new Set(parsed.visited.filter(isValidComponentId));
+                    } else {
+                        localStorage.removeItem(STORAGE_KEY_PROGRESS);
+                    }
+                }
+            } catch (err) {
+                console.warn('[Arch3D] Не удалось загрузить прогресс из localStorage:', err);
+            }
+            updateProgressUI();
+        }
+
+        function saveStudyProgress() {
+            try {
+                const payload = { version: STORAGE_VERSION, visited: [...visitedComponents] };
+                localStorage.setItem(STORAGE_KEY_PROGRESS, JSON.stringify(payload));
+            } catch (err) {
+                console.warn('[Arch3D] Не удалось сохранить прогресс в localStorage:', err);
+            }
+        }
+
+        function markVisited(deviceId, compKey) {
+            const id = `${deviceId}:${compKey}`;
+            if (!visitedComponents.has(id)) {
+                visitedComponents.add(id);
+                saveStudyProgress();
+                updateProgressUI();
+            }
+        }
+
+        function resetStudyProgress() {
+            visitedComponents.clear();
+            try {
+                localStorage.removeItem(STORAGE_KEY_PROGRESS);
+            } catch (err) {
+                console.warn('[Arch3D] Ошибка очистки прогресса:', err);
+            }
+            updateProgressUI();
+            renderDeviceCards(document.getElementById('device-search')?.value || '');
+            showToast('Прогресс изучения сброшен', 'fa-rotate-left', 'text-amber-500');
+        }
+
+        function updateProgressUI() {
+            const pct = TOTAL_COMPONENTS_COUNT > 0
+                ? Math.round((visitedComponents.size / TOTAL_COMPONENTS_COUNT) * 100)
+                : 0;
+            const headerEl = document.getElementById('header-progress-text');
+            if (headerEl) headerEl.textContent = `${pct}%`;
+            const barEl = document.getElementById('global-progress-bar');
+            if (barEl) barEl.style.width = `${pct}%`;
+            const trackEl = document.getElementById('global-progress-track');
+            if (trackEl) trackEl.setAttribute('aria-valuenow', String(pct));
+        }
+
+        function updateHeroCounters() {
+            const devCount = Object.keys(devicesData).length;
+            const devWord = devCount === 1 ? 'устройство' : (devCount >= 2 && devCount <= 4 ? 'устройства' : 'устройств');
+            const badge = document.getElementById('hero-stats-badge');
+            if (badge) {
+                badge.innerHTML = `<i class="fa-solid fa-cubes" aria-hidden="true"></i> ${devCount} ${devWord} • ${TOTAL_COMPONENTS_COUNT} интерактивных 3D-моделей`;
+            }
+        }
+
+        function applyTheme(theme) {
+            const isDark = theme === 'dark';
+            document.documentElement.classList.toggle('dark', isDark);
+
+            const icon = document.getElementById('theme-icon');
+            const label = document.getElementById('theme-label');
+            if (icon) {
+                icon.className = isDark
+                    ? 'fa-solid fa-sun text-base text-amber-400'
+                    : 'fa-solid fa-moon text-base text-indigo-600';
+            }
+            if (label) label.textContent = isDark ? 'Светлая' : 'Тёмная';
+
+            try {
+                localStorage.setItem(STORAGE_KEY_THEME, theme);
+            } catch (err) {
+                console.warn('[Arch3D] Не удалось сохранить тему:', err);
+            }
+            updateThreeThemeLighting(isDark);
+        }
+
+        function toggleTheme() {
+            const isDark = document.documentElement.classList.contains('dark');
+            applyTheme(isDark ? 'light' : 'dark');
+            showToast(
+                isDark ? 'Включена светлая тема' : 'Включена тёмная тема',
+                isDark ? 'fa-sun' : 'fa-moon',
+                isDark ? 'text-amber-500' : 'text-cyan-400'
+            );
+        }
+
+        function initTheme() {
+            let saved = 'dark';
+            try {
+                const stored = localStorage.getItem(STORAGE_KEY_THEME);
+                if (stored === 'light' || stored === 'dark') saved = stored;
+            } catch (err) {
+                console.warn('[Arch3D] Не удалось прочитать тему:', err);
+            }
+            applyTheme(saved);
+        }
+
+        function showResetAllConfirm(show) {
+            document.getElementById('btn-reset-all-trigger')?.classList.toggle('hidden', show);
+            document.getElementById('reset-all-confirm-box')?.classList.toggle('hidden', !show);
+        }
+
+        function confirmResetAllSettings() {
+            try {
+                localStorage.removeItem(STORAGE_KEY_PROGRESS);
+                localStorage.removeItem(STORAGE_KEY_QUIZ);
+                localStorage.removeItem(STORAGE_KEY_THEME);
+            } catch (err) {
+                console.warn('[Arch3D] Ошибка при полном сбросе настроек:', err);
+            }
+            visitedComponents.clear();
+            quizState = {
+                index: 0,
+                answers: Array(quizQuestions.length).fill(null),
+                finished: false,
+                bestScore: null,
+                attempts: 0
+            };
+            applyTheme('dark');
+            updateProgressUI();
+            updateQuizHeaderStats();
+            renderQuizQuestion();
+            renderDeviceCards(document.getElementById('device-search')?.value || '');
+            showResetAllConfirm(false);
+            showToast('Все настройки, тема и статистика сброшены', 'fa-check-double', 'text-emerald-500');
+        }
+
+        /* ============================================================
+           НАВИГАЦИЯ И КАТАЛОГ УСТРОЙСТВ
+           ============================================================ */
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            const target = document.getElementById(`tab-${tabId}`);
+            if (target) target.classList.remove('hidden');
+
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.classList.remove('bg-gradient-to-r', 'from-cyan-500', 'to-teal-500', 'text-slate-950', 'shadow-md');
+                btn.classList.add('text-slate-600', 'dark:text-slate-300', 'hover:text-slate-900', 'dark:hover:text-white');
+            });
+
+            const activeBtn = document.getElementById(`nav-${tabId}`);
+            if (activeBtn) {
+                activeBtn.classList.add('bg-gradient-to-r', 'from-cyan-500', 'to-teal-500', 'text-slate-950', 'shadow-md');
+                activeBtn.classList.remove('text-slate-600', 'dark:text-slate-300', 'hover:text-slate-900', 'dark:hover:text-white');
+            }
+
+            if (tabId === 'devices') {
+                renderDeviceCards(document.getElementById('device-search')?.value || '');
+            } else if (tabId === 'explorer') {
+                setTimeout(resizeThreeViewport, 50);
+            } else if (tabId === 'quiz') {
+                if (quizState.finished) showQuizResultsScreen();
+                else renderQuizQuestion();
+            }
+        }
+
+        function toggleMobileMenu() {
+            document.getElementById('mobile-menu')?.classList.toggle('hidden');
+        }
+
+        function debouncedDeviceSearch(value) {
+            clearTimeout(searchDebounceTimer);
+            searchDebounceTimer = setTimeout(() => renderDeviceCards(value), 250);
+        }
+
+        function renderDeviceCards(query = '') {
+            const grid = document.getElementById('devices-grid');
+            if (!grid) return;
+            const q = query.trim().toLowerCase();
+
+            grid.innerHTML = '';
+            let renderedCount = 0;
+
+            Object.entries(devicesData).forEach(([id, dev]) => {
+                const compEntries = Object.entries(dev.components);
+                const matches = !q
+                    || dev.name.toLowerCase().includes(q)
+                    || dev.summary.toLowerCase().includes(q)
+                    || dev.category.toLowerCase().includes(q)
+                    || compEntries.some(([, c]) => c.title.toLowerCase().includes(q) || c.desc.toLowerCase().includes(q));
+
+                if (!matches) return;
+                renderedCount++;
+
+                const st = DEVICE_COLOR_STYLES[dev.accent] || DEVICE_COLOR_STYLES.cyan;
+                const totalComps = compEntries.length;
+                const doneComps = compEntries.filter(([k]) => visitedComponents.has(`${id}:${k}`)).length;
+                const pct = Math.round((doneComps / totalComps) * 100);
+                const modeLabel = dev.rendererType === 'glb' ? 'GLB' : '3D + Разборка';
+
+                const card = document.createElement('div');
+                card.setAttribute('role', 'button');
+                card.setAttribute('tabindex', '0');
+                card.setAttribute('aria-label', `Открыть устройство ${dev.name}: ${totalComps} моделей`);
+                card.onclick = () => selectDevice(id);
+                card.onkeydown = e => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        selectDevice(id);
+                    }
+                };
+                card.className = `glass-panel p-6 rounded-2xl cursor-pointer ${st.hover} hover:-translate-y-1 focus:outline-none focus:ring-2 focus:ring-cyan-500 transition-all duration-200 group flex flex-col justify-between space-y-5`;
+
+                card.innerHTML = `
+                    <div class="space-y-4">
+                        <div class="flex items-start justify-between gap-3">
+                            <div class="w-14 h-14 rounded-2xl ${st.box} border flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
+                                <i class="fa-solid ${dev.icon}" aria-hidden="true"></i>
+                            </div>
+                            <div class="flex items-center gap-1.5">
+                                <span class="px-2 py-1 rounded-lg text-[10px] font-mono font-bold bg-cyan-500/10 text-cyan-700 dark:text-cyan-300 border border-cyan-500/25">${modeLabel}</span>
+                                <span class="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-200/80 dark:bg-slate-800/90 text-slate-600 dark:text-slate-300 border border-slate-300/60 dark:border-slate-700">
+                                    ${totalComps} модел${totalComps >= 5 ? 'ей' : 'и'}
+                                </span>
+                            </div>
+                        </div>
+                        <div>
+                            <span class="text-[11px] font-mono text-slate-500 dark:text-slate-400">${dev.category}</span>
+                            <h3 class="text-xl font-extrabold text-slate-900 dark:text-white mt-0.5">${dev.name}</h3>
+                            <p class="text-xs sm:text-sm text-slate-600 dark:text-slate-400 leading-relaxed mt-2">${dev.summary}</p>
+                        </div>
+                        <div class="flex flex-wrap gap-1.5">
+                            ${compEntries.slice(0, 5).map(([, c]) => `
+                                <span class="px-2 py-0.5 rounded-md text-[10px] font-medium bg-slate-200/70 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300">${c.shortLabel}</span>
+                            `).join('')}
+                            ${totalComps > 5 ? `<span class="px-2 py-0.5 rounded-md text-[10px] font-medium bg-slate-200/70 dark:bg-slate-800/80 text-slate-500">+${totalComps - 5}</span>` : ''}
+                        </div>
+                    </div>
+
+                    <div class="space-y-2.5 pt-2 border-t border-slate-200/80 dark:border-slate-800">
+                        <div class="flex items-center justify-between text-[11px]">
+                            <span class="text-slate-500 dark:text-slate-400">Изучено: ${doneComps}/${totalComps}</span>
+                            <span class="font-mono font-bold ${st.link}">${pct}%</span>
+                        </div>
+                        <div class="w-full h-1.5 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
+                            <div class="h-full bg-gradient-to-r ${st.bar} transition-all duration-500" style="width: ${pct}%"></div>
+                        </div>
+                        <div class="flex items-center justify-between pt-1">
+                            <span class="${st.link} text-xs font-bold flex items-center gap-1.5">
+                                Открыть 3D-лабораторию <i class="fa-solid fa-arrow-right group-hover:translate-x-1 transition-transform" aria-hidden="true"></i>
+                            </span>
+                        </div>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+
+            if (renderedCount === 0) {
+                grid.innerHTML = `
+                    <div class="col-span-full glass-panel p-10 rounded-2xl text-center space-y-2">
+                        <i class="fa-solid fa-magnifying-glass text-3xl text-slate-400" aria-hidden="true"></i>
+                        <p class="text-base font-bold text-slate-700 dark:text-slate-200">Ничего не найдено</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Попробуйте другой запрос, например «процессор», «сервер» или «GPIO».</p>
+                    </div>
+                `;
+            }
+        }
+
+        function selectDevice(deviceId) {
+            const device = devicesData[deviceId];
+            if (!device) return;
+            currentDeviceId = deviceId;
+
+            const nameEl = document.getElementById('current-device-name');
+            if (nameEl) nameEl.textContent = device.shortName;
+
+            const pillsContainer = document.getElementById('component-pills-container');
+            if (pillsContainer) {
+                pillsContainer.innerHTML = '';
+                Object.entries(device.components).forEach(([key, data]) => {
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.dataset.key = key;
+                    btn.className = 'comp-selector px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-1.5 border';
+                    btn.innerHTML = `<i class="fa-solid ${data.icon || 'fa-microchip'}" aria-hidden="true"></i><span>${data.shortLabel}</span>`;
+                    btn.onclick = () => loadComponentModel(deviceId, key);
+                    pillsContainer.appendChild(btn);
+                });
+            }
+
+            switchTab('explorer');
+            const initialKey = device.components.main ? 'main' : Object.keys(device.components)[0];
+            loadComponentModel(deviceId, initialKey);
+        }
+
+        function navigateComponent(delta) {
+            const device = devicesData[currentDeviceId];
+            if (!device) return;
+            const keys = Object.keys(device.components);
+            const idx = keys.indexOf(currentComponentKey);
+            const nextIdx = idx + delta;
+            if (nextIdx < 0 || nextIdx >= keys.length) return;
+            loadComponentModel(currentDeviceId, keys[nextIdx]);
+        }
+
+        function updatePrevNextButtons(device, componentKey) {
+            const keys = Object.keys(device.components);
+            const idx = keys.indexOf(componentKey);
+            const prevBtn = document.getElementById('btn-prev-comp');
+            const nextBtn = document.getElementById('btn-next-comp');
+            if (prevBtn) prevBtn.disabled = idx <= 0;
+            if (nextBtn) nextBtn.disabled = idx >= keys.length - 1;
+        }
+
+        /* ============================================================
+           ПЕРЕКЛЮЧЕНИЕ РЕЖИМОВ VIEWPORT
+           ============================================================ */
+        function setViewportLoader(show, text = 'Загрузка 3D-модели…') {
+            const loader = document.getElementById('viewport-loader');
+            const label = document.getElementById('viewport-loader-text');
+            if (label) label.textContent = text;
+            if (loader) loader.classList.toggle('hidden', !show);
+        }
+
+        function showViewportFallback(show, title = '', desc = '') {
+            const box = document.getElementById('viewport-fallback');
+            if (!box) return;
+            if (show) {
+                document.getElementById('viewport-fallback-title').textContent = title;
+                document.getElementById('viewport-fallback-desc').textContent = desc;
+                box.classList.remove('hidden');
+            } else {
+                box.classList.add('hidden');
+            }
+        }
+
+        function revokeCustomGLBUrl() {
+            if (customGLBUrl) {
+                URL.revokeObjectURL(customGLBUrl);
+                customGLBUrl = null;
+            }
+        }
+
+        function configureViewerUI(mode) {
+            activeViewerMode = mode;
+            const isThree = mode === 'three';
+            const isCustom = mode === 'custom-glb';
+            const device = devicesData[currentDeviceId];
+            const showExplode = isThree && Boolean(device?.supportsExplode);
+
+            document.getElementById('three-canvas')?.classList.toggle('hidden', !isThree);
+            document.getElementById('hotspots-layer')?.classList.toggle('hidden', !isThree);
+            document.getElementById('glb-viewer')?.classList.toggle('hidden', isThree);
+            document.getElementById('explode-controls-bar')?.classList.toggle('hidden', !showExplode);
+            document.getElementById('glb-hint-bar')?.classList.toggle('hidden', isThree);
+            document.getElementById('exit-custom-glb-btn')?.classList.toggle('hidden', !isCustom);
+
+            document.getElementById('btn-hotspots')?.classList.toggle('hidden', !isThree);
+            document.getElementById('btn-wireframe')?.classList.toggle('hidden', !isThree);
+
+            const fmtBadge = document.getElementById('active-format-badge');
+            if (fmtBadge) {
+                fmtBadge.textContent = isThree ? 'Three.js 3D' : 'GLB 3D';
+            }
+        }
+
+        function loadComponentModel(deviceId, componentKey) {
+            const device = devicesData[deviceId];
+            if (!device) return;
+            const data = device.components[componentKey];
+            if (!data) return;
+
+            revokeCustomGLBUrl();
+            showViewportFallback(false);
+            closeHotspotPopover();
+
+            if (isWireframe) setWireframeState(false);
+
+            currentComponentKey = componentKey;
+            markVisited(deviceId, componentKey);
+
+            document.getElementById('comp-title').textContent = data.title;
+            document.getElementById('comp-type-badge').textContent = data.type;
+            document.getElementById('active-model-title').textContent = data.title;
+            document.getElementById('comp-description').innerHTML = `<p>${data.desc}</p>`;
+            document.getElementById('comp-bus').textContent = data.bus;
+            document.getElementById('comp-fact').textContent = data.fact;
+
+            const specsEl = document.getElementById('comp-specs');
+            specsEl.innerHTML = data.specs.map(s => `
+                <div class="p-2.5 rounded-xl bg-slate-100/90 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800">
+                    <div class="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-mono">${s.k}</div>
+                    <div class="text-xs font-bold text-slate-900 dark:text-white mt-0.5">${s.v}</div>
+                </div>
+            `).join('');
+
+            document.querySelectorAll('.comp-selector').forEach(btn => {
+                const isOn = btn.dataset.key === componentKey;
+                const isVisited = visitedComponents.has(`${deviceId}:${btn.dataset.key}`);
+                btn.className = isOn
+                    ? 'comp-selector px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 border bg-cyan-500 text-slate-950 border-cyan-400 shadow-md shadow-cyan-500/25'
+                    : `comp-selector px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-1.5 border ${
+                        isVisited
+                            ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/20'
+                            : 'bg-slate-200/80 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300/70 dark:border-slate-700 hover:bg-slate-300 dark:hover:bg-slate-700'
+                    }`;
+            });
+
+            updatePrevNextButtons(device, componentKey);
+            setExplodePercent(0);
+            currentExplode = 0;
+
+            if (device.rendererType === 'glb') {
+                clearHotspotsDOM();
+                configureViewerUI('glb');
+                loadGLBSource(data.model, data.title);
+            } else {
+                configureViewerUI('three');
+                if (!webglAvailable) {
+                    showViewportFallback(
+                        true,
+                        'WebGL недоступен в вашем браузере',
+                        'Встроенная 3D-сцена не может быть запущена без аппаратного ускорения WebGL. Вы можете изучать описания, проходить тест или загрузить GLB-модель вручную.'
+                    );
+                    return;
+                }
+                setViewportLoader(true, 'Построение 3D-модели…');
+                requestAnimationFrame(() => {
+                    buildProcedural3DModel(deviceId, componentKey);
+                    reset3DCamera(false);
+                    setViewportLoader(false);
+                });
+            }
+        }
+
+        function loadGLBSource(srcUrl, displayTitle) {
+            const viewer = document.getElementById('glb-viewer');
+            if (!viewer) return;
+
+            setViewportLoader(true, `Загрузка ${displayTitle}…`);
+            showViewportFallback(false);
+
+            viewer.onload = null;
+            const onLoad = () => {
+                viewer.removeEventListener('load', onLoad);
+                viewer.removeEventListener('error', onError);
+                setViewportLoader(false);
+                resetGLBCamera();
+            };
+            const onError = () => {
+                viewer.removeEventListener('load', onLoad);
+                viewer.removeEventListener('error', onError);
+                setViewportLoader(false);
+                showViewportFallback(
+                    true,
+                    `Файл модели не найден: ${srcUrl}`,
+                    'Разместите папку assets/models/ с вашими .glb файлами рядом с HTML и откройте проект через локальный сервер (например, Live Server или python -m http.server), либо выберите .glb файл вручную ниже.'
+                );
+            };
+
+            viewer.addEventListener('load', onLoad);
+            viewer.addEventListener('error', onError);
+            viewer.autoRotate = isAutoRotating;
+            viewer.rotationPerSecond = isAutoRotating ? '15deg' : '0deg';
+            viewer.src = srcUrl;
+        }
+
+        function handleCustomGLBUpload(event) {
+            const file = event.target.files?.[0];
+            if (!file) return;
+
+            revokeCustomGLBUrl();
+            customGLBUrl = URL.createObjectURL(file);
+
+            clearHotspotsDOM();
+            closeHotspotPopover();
+            configureViewerUI('custom-glb');
+            document.getElementById('active-model-title').textContent = `GLB: ${file.name}`;
+            loadGLBSource(customGLBUrl, file.name);
+            showToast(`Загружена модель: ${file.name}`, 'fa-cube', 'text-emerald-500');
+            event.target.value = '';
+        }
+
+        function exitCustomGLBMode() {
+            revokeCustomGLBUrl();
+            loadComponentModel(currentDeviceId, currentComponentKey);
+            showToast('Возврат к модели курса', 'fa-cubes', 'text-cyan-500');
+        }
+
+        /* ============================================================
+           THREE.JS ДВИЖОК И МОДУЛЬНЫЕ 3D-БИЛДЕРЫ
+           ============================================================ */
+        function getCachedMaterial(color, metalness = 0.45, roughness = 0.4, extra = {}) {
+            const key = JSON.stringify({
+                c: color, m: metalness, r: roughness,
+                t: Boolean(extra.transparent), o: extra.opacity ?? 1,
+                e: extra.emissive ?? 0, ei: extra.emissiveIntensity ?? 0,
+                map: extra.mapKey || null, s: extra.side ?? THREE.FrontSide
+            });
+            if (materialCache.has(key)) return materialCache.get(key);
+            const opts = { color, metalness, roughness };
+            if (extra.transparent) opts.transparent = true;
+            if (extra.opacity !== undefined) opts.opacity = extra.opacity;
+            if (extra.emissive !== undefined) opts.emissive = extra.emissive;
+            if (extra.emissiveIntensity !== undefined) opts.emissiveIntensity = extra.emissiveIntensity;
+            if (extra.map) opts.map = extra.map;
+            if (extra.side !== undefined) opts.side = extra.side;
+
+            const material = new THREE.MeshStandardMaterial(opts);
+            materialCache.set(key, material);
+            return material;
+        }
+
+        function createCanvasTexture(key, width, height, drawFn) {
+            if (textureCache[key]) return textureCache[key];
+            const c = document.createElement('canvas');
+            c.width = width;
+            c.height = height;
+            const ctx = c.getContext('2d');
+            drawFn(ctx, width, height);
+            const tex = new THREE.CanvasTexture(c);
+            tex.anisotropy = 4;
+            textureCache[key] = tex;
+            return tex;
+        }
+
+        function getPCBTexture(baseColor = '#0f2922', traceColor = '#1e6b58') {
+            return createCanvasTexture(`pcb_${baseColor}_${traceColor}`, 512, 512, (ctx, w, h) => {
+                ctx.fillStyle = baseColor;
+                ctx.fillRect(0, 0, w, h);
+                ctx.strokeStyle = traceColor;
+                ctx.lineWidth = 2;
+                for (let i = 0; i < 64; i++) {
+                    const x = (i * 29) % w;
+                    const y = (i * 41) % h;
+                    ctx.beginPath();
+                    ctx.moveTo(x, y);
+                    ctx.lineTo(x + 36, y);
+                    ctx.lineTo(x + 56, y + 20);
+                    ctx.lineTo(x + 125, y + 20);
+                    ctx.stroke();
+                    ctx.fillStyle = '#d4af37';
+                    ctx.beginPath();
+                    ctx.arc(x, y, 2.5, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+                ctx.lineWidth = 1;
+                for (let g = 0; g < w; g += 32) {
+                    ctx.beginPath(); ctx.moveTo(g, 0); ctx.lineTo(g, h); ctx.stroke();
+                    ctx.beginPath(); ctx.moveTo(0, g); ctx.lineTo(w, g); ctx.stroke();
+                }
+            });
+        }
+
+        function getLaptopScreenTexture() {
+            return createCanvasTexture('screen_laptop_v2', 512, 320, (ctx, w, h) => {
+                const grad = ctx.createLinearGradient(0, 0, w, h);
+                grad.addColorStop(0, '#0b1220');
+                grad.addColorStop(1, '#134e4a');
+                ctx.fillStyle = grad;
+                ctx.fillRect(0, 0, w, h);
+
+                ctx.fillStyle = 'rgba(16, 185, 129, 0.16)';
+                ctx.fillRect(18, 18, w - 36, 32);
+                ctx.fillStyle = '#34d399';
+                ctx.font = 'bold 16px monospace';
+                ctx.fillText('SYSTEM TELEMETRY // MOBILE x86-64', 32, 39);
+
+                ctx.strokeStyle = '#22d3ee';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                for (let x = 28; x < 260; x += 10) {
+                    const y = 170 - Math.sin(x * 0.055) * 34 - ((x * 3) % 20);
+                    if (x === 28) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+                }
+                ctx.stroke();
+
+                ctx.fillStyle = '#cbd5e1';
+                ctx.font = '14px monospace';
+                const lines = [
+                    'CPU: 12 Cores @ 4.6 GHz',
+                    'RAM: 32 GB LPDDR5',
+                    'TEMP: 52 °C (Dual Fan)',
+                    'BATT: 96% • 75 Wh Li-Po',
+                    'BUS: PCIe 4.0 / USB4'
+                ];
+                lines.forEach((l, i) => ctx.fillText(l, 282, 95 + i * 32));
+            });
+        }
+
+        function createRoundedBoxGeometry(w, h, d, radius = 0.06, bevel = 0.025) {
+            const shape = new THREE.Shape();
+            const hw = w / 2 - radius;
+            const hh = d / 2 - radius;
+            shape.moveTo(-hw, -d / 2);
+            shape.lineTo(hw, -d / 2);
+            shape.quadraticCurveTo(w / 2, -d / 2, w / 2, -hh);
+            shape.lineTo(w / 2, hh);
+            shape.quadraticCurveTo(w / 2, d / 2, hw, d / 2);
+            shape.lineTo(-hw, d / 2);
+            shape.quadraticCurveTo(-w / 2, d / 2, -w / 2, hh);
+            shape.lineTo(-w / 2, -hh);
+            shape.quadraticCurveTo(-w / 2, -d / 2, -hw, -d / 2);
+
+            const geom = new THREE.ExtrudeGeometry(shape, {
+                depth: Math.max(0.01, h - bevel * 2),
+                bevelEnabled: true,
+                bevelSegments: 2,
+                steps: 1,
+                bevelSize: bevel,
+                bevelThickness: bevel
+            });
+            geom.rotateX(-Math.PI / 2);
+            geom.center();
+            return geom;
+        }
+
+        function createAerodynamicFan(radius = 0.42, depth = 0.14, bladeColor = 0x334155, isRadial = false) {
+            const group = new THREE.Group();
+
+            const outerRing = new THREE.Mesh(
+                new THREE.CylinderGeometry(radius * 1.08, radius * 1.08, depth, 28, 1, true),
+                getCachedMaterial(0x1e293b, 0.55, 0.45, { side: THREE.DoubleSide })
+            );
+            outerRing.rotation.x = Math.PI / 2;
+            group.add(outerRing);
+
+            const rimFront = new THREE.Mesh(
+                new THREE.TorusGeometry(radius * 1.05, 0.028, 8, 28),
+                getCachedMaterial(0x334155, 0.65, 0.35)
+            );
+            rimFront.position.z = depth / 2;
+            group.add(rimFront);
+
+            const rotor = new THREE.Group();
+            const hub = new THREE.Mesh(
+                new THREE.CylinderGeometry(radius * 0.3, radius * 0.32, depth * 0.85, 20),
+                getCachedMaterial(0x0f172a, 0.75, 0.3)
+            );
+            hub.rotation.x = Math.PI / 2;
+            rotor.add(hub);
+
+            const bladeShape = new THREE.Shape();
+            const count = isRadial ? 15 : 9;
+            if (isRadial) {
+                bladeShape.moveTo(0, -0.02);
+                bladeShape.quadraticCurveTo(radius * 0.35, 0.04, radius * 0.64, -0.01);
+                bladeShape.lineTo(radius * 0.64, 0.035);
+                bladeShape.quadraticCurveTo(radius * 0.35, 0.085, 0, 0.025);
+                bladeShape.closePath();
+            } else {
+                bladeShape.moveTo(0, -0.04);
+                bladeShape.quadraticCurveTo(radius * 0.32, 0.09, radius * 0.66, 0.02);
+                bladeShape.lineTo(radius * 0.63, -0.09);
+                bladeShape.quadraticCurveTo(radius * 0.3, -0.01, 0, -0.08);
+                bladeShape.closePath();
+            }
+
+            const bladeGeom = new THREE.ExtrudeGeometry(bladeShape, {
+                depth: isRadial ? depth * 0.65 : 0.014,
+                bevelEnabled: false
+            });
+            bladeGeom.center();
+            const bMat = getCachedMaterial(bladeColor, 0.35, 0.4);
+
+            for (let i = 0; i < count; i++) {
+                const angle = (i / count) * Math.PI * 2;
+                const holder = new THREE.Group();
+                holder.rotation.z = angle;
+
+                const blade = new THREE.Mesh(bladeGeom, bMat);
+                blade.position.x = radius * (isRadial ? 0.62 : 0.56);
+                if (!isRadial) blade.rotation.x = 0.52;
+                holder.add(blade);
+                rotor.add(holder);
+            }
+
+            spinObjects.push(rotor);
+            group.add(rotor);
+            return group;
+        }
+
+        function addPart(parent, mesh, pos = [0, 0, 0], explodeVec = [0, 0, 0]) {
+            mesh.position.set(pos[0], pos[1], pos[2]);
+            mesh.userData.basePos = new THREE.Vector3(pos[0], pos[1], pos[2]);
+            mesh.userData.explodeVec = new THREE.Vector3(explodeVec[0], explodeVec[1], explodeVec[2]);
+            parent.add(mesh);
+            return mesh;
+        }
+
+        function initThreeEngine() {
+            const canvas = document.getElementById('three-canvas');
+            if (!canvas || typeof THREE === 'undefined') {
+                webglAvailable = false;
+                return;
+            }
+            try {
+                scene = new THREE.Scene();
+                camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
+                renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, preserveDrawingBuffer: false });
+                renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+                renderer.shadowMap.enabled = false;
+                renderer.toneMapping = THREE.ACESFilmicToneMapping;
+                renderer.toneMappingExposure = 1.08;
+
+                clock = new THREE.Clock();
+
+                hemiLight = new THREE.HemisphereLight(0xf8fafc, 0x334155, 0.85);
+                scene.add(hemiLight);
+
+                keyLight = new THREE.DirectionalLight(0xffffff, 0.95);
+                keyLight.position.set(5, 7, 6);
+                scene.add(keyLight);
+
+                fillLight = new THREE.DirectionalLight(0x38bdf8, 0.35);
+                fillLight.position.set(-6, 3, -5);
+                scene.add(fillLight);
+
+                gridHelper = new THREE.GridHelper(10, 20, 0x06b6d4, 0x334155);
+                gridHelper.position.y = -1.55;
+                gridHelper.material.opacity = 0.16;
+                gridHelper.material.transparent = true;
+                scene.add(gridHelper);
+
+                modelGroup = new THREE.Group();
+                scene.add(modelGroup);
+
+                updateThreeThemeLighting(document.documentElement.classList.contains('dark'));
+                setupViewportControls(canvas);
+                resizeThreeViewport();
+
+                const stage = document.getElementById('viewport-stage');
+                if (window.ResizeObserver && stage) {
+                    new ResizeObserver(resizeThreeViewport).observe(stage);
+                }
+                window.addEventListener('resize', resizeThreeViewport);
+                webglAvailable = true;
+            } catch (err) {
+                console.warn('[Arch3D] Ошибка инициализации WebGL:', err);
+                webglAvailable = false;
+            }
+        }
+
+        function updateThreeThemeLighting(isDark) {
+            if (!hemiLight || !gridHelper) return;
+            hemiLight.intensity = isDark ? 0.82 : 1.05;
+            keyLight.intensity = isDark ? 0.95 : 1.05;
+            gridHelper.material.opacity = isDark ? 0.16 : 0.1;
+        }
+
+        function resizeThreeViewport() {
+            const stage = document.getElementById('viewport-stage');
+            if (!stage || !renderer || !camera) return;
+            const w = stage.clientWidth;
+            const h = stage.clientHeight;
+            if (w === 0 || h === 0) return;
+            camera.aspect = w / h;
+            camera.updateProjectionMatrix();
+            renderer.setSize(w, h, false);
+        }
+
+        function clearCurrent3DModel() {
+            spinObjects = [];
+            while (modelGroup && modelGroup.children.length > 0) {
+                const child = modelGroup.children[0];
+                child.traverse(obj => {
+                    if (obj.geometry) obj.geometry.dispose();
+                });
+                modelGroup.remove(child);
+            }
+        }
+
+        /* ---------- Билдер 1: Ноутбук ---------- */
+        function buildLaptopModel(root, key, registerHotspot) {
+            if (key === 'main') {
+                const base = new THREE.Group();
+                base.add(new THREE.Mesh(createRoundedBoxGeometry(3.3, 0.11, 2.25, 0.12, 0.02), getCachedMaterial(0x475569, 0.8, 0.28)));
+                [[-1.3, -0.85], [1.3, -0.85], [-1.3, 0.85], [1.3, 0.85]].forEach(([fx, fz]) => {
+                    const foot = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.03, 12), getCachedMaterial(0x0f172a, 0.2, 0.7));
+                    foot.position.set(fx, -0.06, fz);
+                    base.add(foot);
+                });
+                addPart(root, base, [0, -0.55, 0], [0, -0.75, 0]);
+
+                const batGroup = new THREE.Group();
+                for (let i = 0; i < 4; i++) {
+                    const cell = new THREE.Mesh(createRoundedBoxGeometry(0.62, 0.08, 0.76, 0.05, 0.015), getCachedMaterial(0x111827, 0.35, 0.45));
+                    cell.position.set(-0.99 + i * 0.66, 0, 0);
+                    batGroup.add(cell);
+                }
+                addPart(root, batGroup, [0, -0.43, 0.52], [0, -0.25, 0.25]);
+                registerHotspot(batGroup, [0, 0.08, 0], 'Батарея Li-Po', 'Четыре плоские ячейки занимают около 40% внутренней площади корпуса.');
+
+                const innerBoard = new THREE.Group();
+                innerBoard.add(new THREE.Mesh(
+                    createRoundedBoxGeometry(2.75, 0.06, 0.92, 0.06, 0.01),
+                    getCachedMaterial(0xffffff, 0.3, 0.45, { map: getPCBTexture('#0f2922', '#10b981'), mapKey: 'pcb_laptop' })
+                ));
+                const curve = new THREE.CatmullRomCurve3([
+                    new THREE.Vector3(-1.05, 0.07, -0.15),
+                    new THREE.Vector3(-0.35, 0.07, 0.06),
+                    new THREE.Vector3(0.35, 0.07, 0.06),
+                    new THREE.Vector3(1.05, 0.07, -0.15)
+                ]);
+                innerBoard.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 24, 0.045, 10, false), getCachedMaterial(0xd97706, 0.9, 0.22)));
+                [-1.1, 1.1].forEach(x => {
+                    const t = createAerodynamicFan(0.26, 0.07, 0x06b6d4, true);
+                    t.rotation.x = Math.PI / 2;
+                    t.position.set(x, 0.05, -0.18);
+                    innerBoard.add(t);
+                });
+                addPart(root, innerBoard, [0, -0.42, -0.48], [0, 0.05, -0.25]);
+                registerHotspot(innerBoard, [0, 0.14, 0], 'Плата и охлаждение', 'Системная плата с BGA-процессором, тепловой трубкой и двумя турбинами.');
+
+                const deck = new THREE.Group();
+                deck.add(new THREE.Mesh(createRoundedBoxGeometry(3.3, 0.08, 2.25, 0.12, 0.02), getCachedMaterial(0x94a3b8, 0.82, 0.24)));
+                const kbWell = new THREE.Mesh(new THREE.BoxGeometry(2.78, 0.02, 1.02), getCachedMaterial(0x334155, 0.5, 0.5));
+                kbWell.position.set(0, 0.04, -0.22);
+                deck.add(kbWell);
+                const keyMat = getCachedMaterial(0x0f172a, 0.25, 0.55);
+                const keyGeom = new THREE.BoxGeometry(0.17, 0.025, 0.14);
+                for (let row = 0; row < 5; row++) {
+                    for (let col = 0; col < 13; col++) {
+                        if (row === 4 && col >= 4 && col <= 8) continue;
+                        const k = new THREE.Mesh(keyGeom, keyMat);
+                        k.position.set(-1.2 + col * 0.2, 0.055, -0.6 + row * 0.185);
+                        deck.add(k);
+                    }
+                }
+                const spacebar = new THREE.Mesh(new THREE.BoxGeometry(0.96, 0.025, 0.14), keyMat);
+                spacebar.position.set(0, 0.055, -0.6 + 4 * 0.185);
+                deck.add(spacebar);
+                const tp = new THREE.Mesh(createRoundedBoxGeometry(1.02, 0.02, 0.64, 0.05, 0.005), getCachedMaterial(0x64748b, 0.65, 0.25));
+                tp.position.set(0, 0.046, 0.68);
+                deck.add(tp);
+                addPart(root, deck, [0, -0.32, 0], [0, 0.52, 0]);
+
+                const lid = new THREE.Group();
+                lid.add(new THREE.Mesh(createRoundedBoxGeometry(3.3, 2.08, 0.08, 0.1, 0.02), getCachedMaterial(0x64748b, 0.85, 0.24)));
+                const bezel = new THREE.Mesh(new THREE.BoxGeometry(3.16, 1.94, 0.02), getCachedMaterial(0x090d16, 0.2, 0.3));
+                bezel.position.z = 0.04;
+                lid.add(bezel);
+                const scr = new THREE.Mesh(
+                    new THREE.PlaneGeometry(3.0, 1.78),
+                    new THREE.MeshBasicMaterial({ map: getLaptopScreenTexture() })
+                );
+                scr.position.z = 0.055;
+                lid.add(scr);
+                const hinge = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 2.2, 14), getCachedMaterial(0x334155, 0.8, 0.3));
+                hinge.rotation.z = Math.PI / 2;
+                hinge.position.set(0, -1.04, 0.02);
+                lid.add(hinge);
+                lid.rotation.x = -0.2;
+                addPart(root, lid, [0, 0.72, -1.28], [0, 0.72, -0.58]);
+                registerHotspot(lid, [0, 0.2, 0.08], 'Дисплей IPS/OLED', 'Тонкорамочная матрица, подключённая к плате шлейфом eDP через шарнир.');
+            } else if (key === 'cooling') {
+                const pipesGroup = new THREE.Group();
+                const c1 = new THREE.CatmullRomCurve3([
+                    new THREE.Vector3(-1.35, 0.06, -0.35),
+                    new THREE.Vector3(-0.55, 0.08, 0.12),
+                    new THREE.Vector3(0.55, 0.08, 0.12),
+                    new THREE.Vector3(1.35, 0.06, -0.35)
+                ]);
+                const c2 = new THREE.CatmullRomCurve3([
+                    new THREE.Vector3(-1.35, 0.06, -0.15),
+                    new THREE.Vector3(-0.45, 0.08, -0.18),
+                    new THREE.Vector3(0.45, 0.08, -0.18),
+                    new THREE.Vector3(1.35, 0.06, -0.15)
+                ]);
+                pipesGroup.add(new THREE.Mesh(new THREE.TubeGeometry(c1, 32, 0.06, 12, false), getCachedMaterial(0xd97706, 0.9, 0.2)));
+                pipesGroup.add(new THREE.Mesh(new THREE.TubeGeometry(c2, 32, 0.055, 12, false), getCachedMaterial(0xb45309, 0.9, 0.22)));
+                addPart(root, pipesGroup, [0, 0.06, 0], [0, 0.52, 0]);
+
+                const plates = new THREE.Group();
+                plates.add(new THREE.Mesh(createRoundedBoxGeometry(0.76, 0.09, 0.72, 0.06, 0.015), getCachedMaterial(0xf59e0b, 0.88, 0.2)));
+                const gpuPlate = new THREE.Mesh(createRoundedBoxGeometry(0.64, 0.09, 0.64, 0.06, 0.015), getCachedMaterial(0xf59e0b, 0.88, 0.2));
+                gpuPlate.position.set(0.85, 0, 0);
+                plates.add(gpuPlate);
+                addPart(root, plates, [-0.42, -0.02, 0.02], [0, -0.45, 0]);
+                registerHotspot(plates, [0.42, 0.12, 0], 'Медные теплосъёмники', 'Прижимаются напрямую к открытым кристаллам CPU и GPU через термоинтерфейс.');
+
+                [-1.4, 1.4].forEach((x, idx) => {
+                    const turbineUnit = new THREE.Group();
+                    const fan = createAerodynamicFan(0.56, 0.16, idx === 0 ? 0x06b6d4 : 0x10b981, true);
+                    fan.rotation.x = Math.PI / 2;
+                    turbineUnit.add(fan);
+                    for (let r = 0; r < 10; r++) {
+                        const fin = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.16, 0.28), getCachedMaterial(0xcbd5e1, 0.85, 0.25));
+                        fin.position.set(-0.36 + r * 0.08, 0, -0.68);
+                        turbineUnit.add(fin);
+                    }
+                    addPart(root, turbineUnit, [x, 0, -0.15], [x * 0.42, 0, 0]);
+                    registerHotspot(turbineUnit, [0, 0.2, 0], idx === 0 ? 'Левая турбина' : 'Правая турбина', 'Центробежный вентилятор проталкивает воздух через плотный пакет рёбер.');
+                });
+            } else if (key === 'mobo_laptop') {
+                const pcb = new THREE.Mesh(
+                    createRoundedBoxGeometry(3.3, 0.08, 1.85, 0.08, 0.01),
+                    getCachedMaterial(0xffffff, 0.25, 0.45, { map: getPCBTexture('#0c1e35', '#06b6d4'), mapKey: 'pcb_mobo_lap' })
+                );
+                addPart(root, pcb, [0, 0, 0], [0, -0.35, 0]);
+
+                const cpuGroup = new THREE.Group();
+                cpuGroup.add(new THREE.Mesh(createRoundedBoxGeometry(0.95, 0.06, 0.7, 0.04, 0.01), getCachedMaterial(0x065f46, 0.35, 0.45)));
+                const die = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.07, 0.34), getCachedMaterial(0x38bdf8, 0.95, 0.08));
+                die.position.y = 0.05;
+                cpuGroup.add(die);
+                addPart(root, cpuGroup, [-0.55, 0.08, -0.05], [0, 0.55, 0]);
+                registerHotspot(cpuGroup, [0, 0.15, 0], 'Мобильный CPU (BGA)', 'Распаян прямо на плату с открытым кристаллом для уменьшения толщины.');
+
+                const ramGroup = new THREE.Group();
+                ramGroup.add(new THREE.Mesh(new THREE.BoxGeometry(1.18, 0.05, 0.52), getCachedMaterial(0x0f172a, 0.35, 0.5)));
+                for (let i = 0; i < 4; i++) {
+                    const chip = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.05, 0.3), getCachedMaterial(0x1e293b, 0.45, 0.4));
+                    chip.position.set(-0.38 + i * 0.25, 0.04, 0);
+                    ramGroup.add(chip);
+                }
+                addPart(root, ramGroup, [0.72, 0.1, 0.42], [0, 0.72, 0.25]);
+                registerHotspot(ramGroup, [0, 0.14, 0], 'ОЗУ SO-DIMM', 'Укороченный модуль памяти для ноутбуков.');
+
+                const ssd = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.05, 0.34), getCachedMaterial(0x111827, 0.4, 0.45));
+                addPart(root, ssd, [0.72, 0.09, -0.45], [0, 0.58, -0.2]);
+
+                const ports = new THREE.Group();
+                for (let i = 0; i < 3; i++) {
+                    const p = new THREE.Mesh(createRoundedBoxGeometry(0.24, 0.11, 0.24, 0.03, 0.01), getCachedMaterial(0xcbd5e1, 0.9, 0.2));
+                    p.position.set(0, 0, -0.5 + i * 0.42);
+                    ports.add(p);
+                }
+                addPart(root, ports, [-1.56, 0.09, 0], [-0.45, 0.1, 0]);
+                registerHotspot(ports, [0, 0.16, 0], 'Порты USB-C PD', 'Передают данные USB4, видеосигнал DisplayPort и питание до 100 Вт.');
+            } else if (key === 'battery') {
+                const cells = [];
+                for (let i = 0; i < 4; i++) {
+                    const cellGroup = new THREE.Group();
+                    cellGroup.add(new THREE.Mesh(createRoundedBoxGeometry(0.72, 0.16, 1.38, 0.09, 0.035), getCachedMaterial(0x111827, 0.35, 0.42)));
+                    const foil = new THREE.Mesh(new THREE.BoxGeometry(0.76, 0.03, 1.44), getCachedMaterial(0x64748b, 0.75, 0.35));
+                    cellGroup.add(foil);
+                    addPart(root, cellGroup, [-1.14 + i * 0.76, 0, 0.1], [(i - 1.5) * 0.3, 0, 0]);
+                    cells.push(cellGroup);
+                }
+                registerHotspot(cells[1], [0, 0.18, 0], 'Ячейки Li-Polymer', 'Мягкие фольгированные пакеты с высоким отношением ёмкости к весу.');
+
+                const bms = new THREE.Group();
+                bms.add(new THREE.Mesh(createRoundedBoxGeometry(3.15, 0.07, 0.26, 0.03, 0.01), getCachedMaterial(0x065f46, 0.4, 0.4)));
+                const ic = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.06, 0.18), getCachedMaterial(0x0f172a, 0.4, 0.5));
+                ic.position.y = 0.05;
+                bms.add(ic);
+                const conn = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.1, 0.14), getCachedMaterial(0xe2e8f0, 0.3, 0.5));
+                conn.position.set(0.85, 0.05, -0.14);
+                bms.add(conn);
+                addPart(root, bms, [0, 0.04, -0.76], [0, 0.4, -0.58]);
+                registerHotspot(bms, [0, 0.16, 0], 'Контроллер BMS', 'Управляет балансировкой ячеек и защищает от перезаряда и перегрева.');
+            }
+        }
+
+        /* ---------- Билдер 2: Сервер 1U ---------- */
+        function buildServerModel(root, key, registerHotspot) {
+            if (key === 'main') {
+                const chassis = new THREE.Group();
+                chassis.add(new THREE.Mesh(createRoundedBoxGeometry(3.55, 0.38, 2.8, 0.04, 0.01), getCachedMaterial(0x334155, 0.75, 0.32)));
+                [-1.84, 1.84].forEach(ex => {
+                    const ear = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.38, 0.14), getCachedMaterial(0x94a3b8, 0.85, 0.25));
+                    ear.position.set(ex, 0, 1.35);
+                    chassis.add(ear);
+                });
+                addPart(root, chassis, [0, -0.12, 0], [0, -0.35, 0]);
+
+                const lid = new THREE.Mesh(createRoundedBoxGeometry(3.52, 0.05, 2.74, 0.03, 0.008), getCachedMaterial(0x64748b, 0.82, 0.28));
+                addPart(root, lid, [0, 0.12, 0], [0, 1.2, 0]);
+
+                const bays = new THREE.Group();
+                for (let i = 0; i < 8; i++) {
+                    const x = -1.47 + i * 0.42;
+                    const bay = new THREE.Mesh(createRoundedBoxGeometry(0.38, 0.28, 0.56, 0.02, 0.008), getCachedMaterial(0x0f172a, 0.5, 0.4));
+                    bay.position.set(x, 0, 0);
+                    bays.add(bay);
+                    const latch = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.07, 0.05), getCachedMaterial(0xf59e0b, 0.5, 0.35));
+                    latch.position.set(x, -0.07, 0.29);
+                    bays.add(latch);
+                    const led = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.04), getCachedMaterial(0x10b981, 0.2, 0.2, { emissive: 0x10b981, emissiveIntensity: 0.9 }));
+                    led.position.set(x + 0.11, 0.07, 0.29);
+                    bays.add(led);
+                }
+                addPart(root, bays, [0, -0.1, 1.2], [0, 0, 0.75]);
+                registerHotspot(bays, [0, 0.24, 0.25], 'Корзина Hot-Swap', '8 отсеков 2.5" с горячей заменой и светодиодами активности.');
+
+                const fanWall = new THREE.Group();
+                for (let i = 0; i < 6; i++) {
+                    const f = createAerodynamicFan(0.15, 0.16, 0xf59e0b, false);
+                    f.position.set(-1.25 + i * 0.5, 0, 0);
+                    fanWall.add(f);
+                }
+                addPart(root, fanWall, [0, -0.06, 0.42], [0, 0.42, 0.18]);
+                registerHotspot(fanWall, [0, 0.24, 0], 'Ряд турбин 40 мм', 'Обеспечивают сквозную туннельную продувку всего шасси 1U.');
+
+                const cpuZone = new THREE.Group();
+                [-0.68, 0.68].forEach(cx => {
+                    for (let f = -4; f <= 4; f++) {
+                        const fin = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.22, 0.78), getCachedMaterial(0xd97706, 0.9, 0.22));
+                        fin.position.set(cx + f * 0.08, 0, 0);
+                        cpuZone.add(fin);
+                    }
+                });
+                addPart(root, cpuZone, [0, -0.04, -0.45], [0, 0.55, 0]);
+                registerHotspot(cpuZone, [0, 0.22, 0], 'Зона 2× CPU + ECC', 'Два процессора под пассивными медными радиаторами в воздушном туннеле.');
+            } else if (key === 'dual_cpu') {
+                const pcb = new THREE.Mesh(
+                    createRoundedBoxGeometry(3.45, 0.1, 2.5, 0.06, 0.01),
+                    getCachedMaterial(0xffffff, 0.25, 0.45, { map: getPCBTexture('#062a20', '#10b981'), mapKey: 'pcb_server' })
+                );
+                addPart(root, pcb, [0, 0, 0], [0, -0.35, 0]);
+
+                [-0.72, 0.72].forEach((cx, idx) => {
+                    const hs = new THREE.Group();
+                    hs.add(new THREE.Mesh(new THREE.BoxGeometry(0.88, 0.07, 0.98), getCachedMaterial(0xb45309, 0.9, 0.22)));
+                    for (let f = -5; f <= 5; f++) {
+                        const fin = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.28, 0.94), getCachedMaterial(0xd97706, 0.9, 0.22));
+                        fin.position.set(f * 0.078, 0.16, 0);
+                        hs.add(fin);
+                    }
+                    addPart(root, hs, [cx, 0.08, 0], [cx * 0.35, 0.65, 0]);
+                    registerHotspot(hs, [0, 0.34, 0], `Процессор CPU ${idx}`, 'Сокет NUMA с пассивным медным радиатором.');
+                });
+
+                const ramBank = new THREE.Group();
+                for (let i = 0; i < 6; i++) {
+                    const leftDimm = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.3, 1.15), getCachedMaterial(0x06b6d4, 0.5, 0.3));
+                    leftDimm.position.set(-1.56 + i * 0.11, 0, 0);
+                    ramBank.add(leftDimm);
+                    const rightDimm = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.3, 1.15), getCachedMaterial(0x06b6d4, 0.5, 0.3));
+                    rightDimm.position.set(1.56 - i * 0.11, 0, 0);
+                    ramBank.add(rightDimm);
+                }
+                addPart(root, ramBank, [0, 0.2, 0], [0, 0.45, 0]);
+                registerHotspot(ramBank, [1.3, 0.22, 0.3], 'Банки ECC DDR5', 'Регистровая память с автоматической коррекцией битовых ошибок.');
+            } else if (key === 'raid') {
+                const bp = new THREE.Group();
+                bp.add(new THREE.Mesh(
+                    createRoundedBoxGeometry(3.15, 0.88, 0.1, 0.04, 0.01),
+                    getCachedMaterial(0xffffff, 0.3, 0.45, { map: getPCBTexture('#0f2922', '#f59e0b'), mapKey: 'pcb_raid' })
+                ));
+                for (let i = 0; i < 4; i++) {
+                    const conn = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.12, 0.14), getCachedMaterial(0x0f172a, 0.4, 0.5));
+                    conn.position.set(-1.08 + i * 0.72, -0.18, 0.08);
+                    bp.add(conn);
+                }
+                addPart(root, bp, [0, 0, -0.82], [0, 0, -0.62]);
+                registerHotspot(bp, [0, 0.52, 0], 'Плата Backplane', 'Распределяет питание и линии SAS/NVMe между всеми отсеками RAID.');
+
+                const drives = [];
+                for (let i = 0; i < 4; i++) {
+                    const d = new THREE.Group();
+                    d.add(new THREE.Mesh(createRoundedBoxGeometry(0.64, 0.7, 1.38, 0.03, 0.01), getCachedMaterial(0x1e293b, 0.72, 0.3)));
+                    const handle = new THREE.Mesh(createRoundedBoxGeometry(0.52, 0.12, 0.08, 0.02, 0.008), getCachedMaterial(0xf59e0b, 0.5, 0.3));
+                    handle.position.set(0, -0.22, 0.72);
+                    d.add(handle);
+                    const led = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.04), getCachedMaterial(0x10b981, 0.2, 0.2, { emissive: 0x10b981, emissiveIntensity: 0.9 }));
+                    led.position.set(0.2, 0.22, 0.7);
+                    d.add(led);
+                    addPart(root, d, [-1.08 + i * 0.72, 0, 0.04], [(i - 1.5) * 0.2, 0, 0.45 + (i % 2) * 0.4]);
+                    drives.push(d);
+                }
+                registerHotspot(drives[1], [0, 0.42, 0.3], 'Салазки Hot-Swap', 'Позволяют заменить неисправный диск без остановки сервера.');
+            } else if (key === 'redundant_psu') {
+                const cage = new THREE.Mesh(
+                    createRoundedBoxGeometry(2.35, 0.78, 2.15, 0.04, 0.01),
+                    getCachedMaterial(0x334155, 0.7, 0.4, { transparent: true, opacity: 0.32 })
+                );
+                addPart(root, cage, [0, 0, 0], [0, -0.45, 0]);
+
+                [-0.56, 0.56].forEach((x, idx) => {
+                    const unit = new THREE.Group();
+                    unit.add(new THREE.Mesh(createRoundedBoxGeometry(0.96, 0.62, 2.18, 0.04, 0.012), getCachedMaterial(0x94a3b8, 0.85, 0.25)));
+                    const handle = new THREE.Mesh(
+                        new THREE.TorusGeometry(0.18, 0.035, 8, 16, Math.PI),
+                        getCachedMaterial(idx === 0 ? 0x10b981 : 0xf59e0b, 0.5, 0.35)
+                    );
+                    handle.rotation.x = Math.PI / 2;
+                    handle.position.set(0, -0.05, 1.1);
+                    unit.add(handle);
+                    const blade = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.06, 0.18), getCachedMaterial(0xf59e0b, 0.9, 0.2));
+                    blade.position.set(0, -0.1, -1.16);
+                    unit.add(blade);
+                    addPart(root, unit, [x, 0, 0], [x * 0.28, 0, idx === 1 ? 1.0 : 0.25]);
+                    registerHotspot(unit, [0, 0.38, 0.5], `Модуль PSU #${idx + 1}`, idx === 0 ? 'Основной блок питания с КПД до 96%.' : 'Резервный модуль Hot-Plug: выдвигается без отключения сервера.');
+                });
+            }
+        }
+
+        /* ---------- Билдер 3: Одноплатный ПК SBC ---------- */
+        function buildSBCModel(root, key, registerHotspot) {
+            if (key === 'main') {
+                const pcb = new THREE.Group();
+                pcb.add(new THREE.Mesh(
+                    createRoundedBoxGeometry(3.25, 0.1, 2.15, 0.14, 0.012),
+                    getCachedMaterial(0xffffff, 0.25, 0.45, { map: getPCBTexture('#0b4628', '#22c55e'), mapKey: 'pcb_sbc' })
+                ));
+                [[-1.4, -0.88], [1.4, -0.88], [-1.4, 0.88], [1.4, 0.88]].forEach(([hx, hz]) => {
+                    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.08, 0.025, 8, 16), getCachedMaterial(0xf59e0b, 0.9, 0.2));
+                    ring.rotation.x = Math.PI / 2;
+                    ring.position.set(hx, 0.055, hz);
+                    pcb.add(ring);
+                });
+                addPart(root, pcb, [0, 0, 0], [0, -0.35, 0]);
+
+                const soc = new THREE.Mesh(createRoundedBoxGeometry(0.7, 0.11, 0.7, 0.05, 0.015), getCachedMaterial(0xcbd5e1, 0.9, 0.18));
+                addPart(root, soc, [-0.24, 0.1, 0.05], [0, 0.65, 0]);
+                registerHotspot(soc, [0, 0.16, 0], 'ARM SoC', 'Четырёхъядерный RISC-процессор с интегрированной графикой.');
+
+                const wifi = new THREE.Mesh(createRoundedBoxGeometry(0.54, 0.09, 0.44, 0.04, 0.01), getCachedMaterial(0xe2e8f0, 0.92, 0.18));
+                addPart(root, wifi, [-1.15, 0.09, -0.15], [-0.25, 0.5, 0]);
+                const ram = new THREE.Mesh(createRoundedBoxGeometry(0.48, 0.09, 0.58, 0.03, 0.01), getCachedMaterial(0x111827, 0.4, 0.48));
+                addPart(root, ram, [0.44, 0.09, 0.14], [0, 0.48, 0]);
+
+                const gpio = new THREE.Group();
+                gpio.add(new THREE.Mesh(new THREE.BoxGeometry(2.15, 0.12, 0.24), getCachedMaterial(0x0f172a, 0.35, 0.5)));
+                const pinGeom = new THREE.BoxGeometry(0.032, 0.28, 0.032);
+                const goldMat = getCachedMaterial(0xf59e0b, 0.9, 0.2);
+                for (let i = 0; i < 20; i++) {
+                    [-0.05, 0.05].forEach(pz => {
+                        const pin = new THREE.Mesh(pinGeom, goldMat);
+                        pin.position.set(-1.0 + i * 0.105, 0.16, pz);
+                        gpio.add(pin);
+                    });
+                }
+                addPart(root, gpio, [-0.18, 0.11, -0.82], [0, 0.72, -0.35]);
+                registerHotspot(gpio, [0, 0.34, 0], 'Гребёнка GPIO (40-pin)', 'Интерфейс для датчиков, сервоприводов, I2C, SPI и UART.');
+
+                const ioBlock = new THREE.Group();
+                ioBlock.add(new THREE.Mesh(createRoundedBoxGeometry(0.64, 0.52, 0.56, 0.04, 0.012), getCachedMaterial(0xcbd5e1, 0.9, 0.2)));
+                const usb3 = new THREE.Mesh(createRoundedBoxGeometry(0.62, 0.52, 0.48, 0.03, 0.01), getCachedMaterial(0x0284c7, 0.72, 0.25));
+                usb3.position.z = 0.6;
+                ioBlock.add(usb3);
+                const usb2 = new THREE.Mesh(createRoundedBoxGeometry(0.62, 0.52, 0.48, 0.03, 0.01), getCachedMaterial(0x94a3b8, 0.85, 0.22));
+                usb2.position.z = 1.18;
+                ioBlock.add(usb2);
+                addPart(root, ioBlock, [1.34, 0.31, -0.58], [0.55, 0.2, 0]);
+                registerHotspot(ioBlock, [0, 0.35, 0.55], 'Ethernet и USB 3.0', 'Гигабитная сеть и 4 порта USB для периферии и накопителей.');
+
+                const bottomPorts = new THREE.Group();
+                [-1.12, -0.58, -0.14].forEach((px, idx) => {
+                    const p = new THREE.Mesh(createRoundedBoxGeometry(idx === 0 ? 0.34 : 0.26, 0.13, 0.26, 0.03, 0.01), getCachedMaterial(0xe2e8f0, 0.9, 0.2));
+                    p.position.x = px;
+                    bottomPorts.add(p);
+                });
+                addPart(root, bottomPorts, [0, 0.11, 0.96], [0, 0.22, 0.42]);
+            } else if (key === 'arm_soc') {
+                const sub = new THREE.Mesh(
+                    createRoundedBoxGeometry(2.6, 0.12, 2.2, 0.1, 0.015),
+                    getCachedMaterial(0xffffff, 0.28, 0.45, { map: getPCBTexture('#064e3b', '#34d399'), mapKey: 'pcb_arm' })
+                );
+                addPart(root, sub, [0, -0.12, 0], [0, -0.45, 0]);
+
+                const die = new THREE.Mesh(createRoundedBoxGeometry(1.2, 0.18, 1.2, 0.07, 0.025), getCachedMaterial(0xcbd5e1, 0.92, 0.18));
+                addPart(root, die, [-0.28, 0.06, 0], [0, 0.65, 0]);
+                registerHotspot(die, [0, 0.2, 0], 'Кристалл ARM64', 'Четыре ядра Cortex-A, графический блок и видеодекодер.');
+
+                const pmic = new THREE.Mesh(createRoundedBoxGeometry(0.56, 0.12, 0.56, 0.04, 0.012), getCachedMaterial(0x111827, 0.4, 0.48));
+                addPart(root, pmic, [0.85, 0.04, 0.32], [0.42, 0.48, 0]);
+                registerHotspot(pmic, [0, 0.16, 0], 'Контроллер PMIC', 'Преобразует входные 5 В в стабильные линии питания ядер и памяти.');
+
+                const quartz = new THREE.Mesh(createRoundedBoxGeometry(0.38, 0.1, 0.22, 0.03, 0.01), getCachedMaterial(0xf59e0b, 0.9, 0.2));
+                addPart(root, quartz, [0.82, 0.03, -0.46], [0.35, 0.48, 0]);
+            } else if (key === 'gpio') {
+                const pcb = new THREE.Mesh(
+                    createRoundedBoxGeometry(3.45, 0.12, 1.25, 0.08, 0.012),
+                    getCachedMaterial(0xffffff, 0.25, 0.45, { map: getPCBTexture('#064e3b', '#22c55e'), mapKey: 'pcb_gpio' })
+                );
+                addPart(root, pcb, [0, -0.22, 0], [0, -0.4, 0]);
+
+                const shroud = new THREE.Mesh(createRoundedBoxGeometry(3.18, 0.22, 0.44, 0.03, 0.01), getCachedMaterial(0x0f172a, 0.35, 0.5));
+                addPart(root, shroud, [0, -0.02, 0], [0, 0.08, 0]);
+
+                const pinsGroup = new THREE.Group();
+                const pinColors = [0xf97316, 0xef4444, 0x22c55e, 0xef4444, 0x22c55e, 0x334155, 0x22c55e, 0x3b82f6, 0x334155, 0x3b82f6];
+                const pinGeom = new THREE.BoxGeometry(0.055, 0.56, 0.055);
+                const collarGeom = new THREE.BoxGeometry(0.11, 0.1, 0.11);
+                const goldMat = getCachedMaterial(0xf59e0b, 0.9, 0.2);
+
+                for (let i = 0; i < 20; i++) {
+                    for (let r = 0; r < 2; r++) {
+                        const x = -1.42 + i * 0.15;
+                        const z = r === 0 ? -0.09 : 0.09;
+                        const col = pinColors[(i * 2 + r) % pinColors.length];
+                        const pin = new THREE.Mesh(pinGeom, goldMat);
+                        pin.position.set(x, 0.24, z);
+                        pinsGroup.add(pin);
+                        const collar = new THREE.Mesh(collarGeom, getCachedMaterial(col, 0.3, 0.4));
+                        collar.position.set(x, 0.02, z);
+                        pinsGroup.add(collar);
+                    }
+                }
+                addPart(root, pinsGroup, [0, 0.1, 0], [0, 0.55, 0]);
+                registerHotspot(pinsGroup, [-1.35, 0.56, 0], 'Питание 3.3В / 5В', 'Крайние контакты подают питание на внешние датчики.');
+                registerHotspot(pinsGroup, [0, 0.56, 0], 'Цифровые GPIO', 'Программируются на вход (кнопки) или выход (светодиоды, реле).');
+                registerHotspot(pinsGroup, [1.1, 0.56, 0], 'Шины SPI / UART', 'Последовательный обмен данными с экранами, GPS и контроллерами.');
+            }
+        }
+
+        function buildProcedural3DModel(deviceId, key) {
+            clearCurrent3DModel();
+            clearHotspotsDOM();
+
+            const root = new THREE.Group();
+            const pendingHotspots = [];
+            const registerHotspot = (targetMesh, localOffset, label, desc) => {
+                pendingHotspots.push({ targetMesh, localOffset: new THREE.Vector3(...localOffset), label, desc });
+            };
+
+            if (deviceId === 'laptop') buildLaptopModel(root, key, registerHotspot);
+            else if (deviceId === 'server') buildServerModel(root, key, registerHotspot);
+            else if (deviceId === 'sbc') buildSBCModel(root, key, registerHotspot);
+
+            modelGroup.add(root);
+            setupHotspotsDOM(pendingHotspots);
+        }
+
+        /* ============================================================
+           ХОТСПОТЫ
+           ============================================================ */
+        function clearHotspotsDOM() {
+            activeHotspotsData.forEach(item => {
+                if (item.btn) item.btn.onclick = null;
+                if (item.el && item.el.parentNode) item.el.parentNode.removeChild(item.el);
+            });
+            activeHotspotsData = [];
+            const layer = document.getElementById('hotspots-layer');
+            if (layer) layer.innerHTML = '';
+        }
+
+        function setupHotspotsDOM(hotspots) {
+            const layer = document.getElementById('hotspots-layer');
+            if (!layer) return;
+
+            hotspots.forEach((h, idx) => {
+                const pin = document.createElement('div');
+                pin.className = 'hotspot-pin';
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'hotspot-dot bg-cyan-500 hover:bg-cyan-400 text-slate-950 border-2 border-white dark:border-slate-900';
+                btn.title = h.label;
+                btn.setAttribute('aria-label', `Аннотация ${idx + 1}: ${h.label}`);
+                btn.textContent = String(idx + 1);
+                btn.onclick = e => {
+                    e.stopPropagation();
+                    openHotspotPopover(h);
+                };
+                pin.appendChild(btn);
+                layer.appendChild(pin);
+
+                activeHotspotsData.push({
+                    el: pin,
+                    btn,
+                    targetMesh: h.targetMesh,
+                    localOffset: h.localOffset
+                });
+            });
+            layer.style.display = showHotspots ? 'block' : 'none';
+        }
+
+        const _tmpHotspotVec = new THREE.Vector3();
+        function updateHotspotsProjection() {
+            if (!showHotspots || activeViewerMode !== 'three' || !camera || !renderer) return;
+            const stage = document.getElementById('viewport-stage');
+            if (!stage) return;
+            const w = stage.clientWidth;
+            const h = stage.clientHeight;
+            if (w === 0 || h === 0) return;
+
+            for (let i = 0; i < activeHotspotsData.length; i++) {
+                const item = activeHotspotsData[i];
+                if (!item.targetMesh) continue;
+
+                _tmpHotspotVec.copy(item.localOffset);
+                item.targetMesh.localToWorld(_tmpHotspotVec);
+                _tmpHotspotVec.project(camera);
+
+                const outOfBounds = _tmpHotspotVec.z > 1 || _tmpHotspotVec.z < -1
+                    || _tmpHotspotVec.x < -0.96 || _tmpHotspotVec.x > 0.96
+                    || _tmpHotspotVec.y < -0.92 || _tmpHotspotVec.y > 0.92;
+
+                if (outOfBounds) {
+                    item.el.style.opacity = '0';
+                    item.el.style.pointerEvents = 'none';
+                } else {
+                    const x = (_tmpHotspotVec.x * 0.5 + 0.5) * w;
+                    const y = (-_tmpHotspotVec.y * 0.5 + 0.5) * h;
+                    item.el.style.left = `${x}px`;
+                    item.el.style.top = `${y}px`;
+                    item.el.style.opacity = '1';
+                    item.el.style.pointerEvents = 'auto';
+                }
+            }
+        }
+
+        function openHotspotPopover(h) {
+            document.getElementById('hotspot-popover-title').textContent = h.label;
+            document.getElementById('hotspot-popover-desc').textContent = h.desc;
+            document.getElementById('hotspot-popover').classList.remove('hidden');
+        }
+
+        function closeHotspotPopover() {
+            document.getElementById('hotspot-popover')?.classList.add('hidden');
+        }
+
+        /* ============================================================
+           УПРАВЛЕНИЕ КАМЕРОЙ И ВЗРЫВ-СХЕМА
+           ============================================================ */
+        function setupViewportControls(canvas) {
+            canvas.addEventListener('mousedown', e => {
+                isPointerDown = true;
+                prevPointer = { x: e.clientX, y: e.clientY };
+            });
+            window.addEventListener('mouseup', () => { isPointerDown = false; });
+            window.addEventListener('mousemove', e => {
+                if (!isPointerDown) return;
+                const dx = e.clientX - prevPointer.x;
+                const dy = e.clientY - prevPointer.y;
+                prevPointer = { x: e.clientX, y: e.clientY };
+                targetTheta -= dx * 0.008;
+                targetPhi = Math.max(0.22, Math.min(Math.PI - 0.22, targetPhi - dy * 0.008));
+            });
+
+            canvas.addEventListener('wheel', e => {
+                e.preventDefault();
+                targetRadius = Math.max(2.3, Math.min(10.5, targetRadius + e.deltaY * 0.004));
+            }, { passive: false });
+
+            canvas.addEventListener('touchstart', e => {
+                if (e.touches.length === 1) {
+                    isPointerDown = true;
+                    pinchStartDist = 0;
+                    prevPointer = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+                } else if (e.touches.length === 2) {
+                    isPointerDown = false;
+                    const dx = e.touches[0].clientX - e.touches[1].clientX;
+                    const dy = e.touches[0].clientY - e.touches[1].clientY;
+                    pinchStartDist = Math.hypot(dx, dy);
+                    pinchStartRadius = targetRadius;
+                }
+            }, { passive: true });
+
+            canvas.addEventListener('touchmove', e => {
+                if (e.touches.length === 1 && isPointerDown) {
+                    const dx = e.touches[0].clientX - prevPointer.x;
+                    const dy = e.touches[0].clientY - prevPointer.y;
+                    prevPointer = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+                    targetTheta -= dx * 0.009;
+                    targetPhi = Math.max(0.22, Math.min(Math.PI - 0.22, targetPhi - dy * 0.009));
+                } else if (e.touches.length === 2 && pinchStartDist > 0) {
+                    e.preventDefault();
+                    const dx = e.touches[0].clientX - e.touches[1].clientX;
+                    const dy = e.touches[0].clientY - e.touches[1].clientY;
+                    const dist = Math.hypot(dx, dy);
+                    const scale = pinchStartDist / Math.max(10, dist);
+                    targetRadius = Math.max(2.3, Math.min(10.5, pinchStartRadius * scale));
+                }
+            }, { passive: false });
+
+            canvas.addEventListener('touchend', e => {
+                if (e.touches.length === 1) {
+                    pinchStartDist = 0;
+                    isPointerDown = true;
+                    prevPointer = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+                } else if (e.touches.length === 0) {
+                    isPointerDown = false;
+                    pinchStartDist = 0;
+                }
+            });
+
+            const bindHoldZoom = (btnId, dir) => {
+                const btn = document.getElementById(btnId);
+                if (!btn) return;
+                const start = e => {
+                    e.preventDefault();
+                    activeZoomDir = dir;
+                    applySingleZoomStep(dir);
+                };
+                const stop = () => { activeZoomDir = 0; };
+                btn.addEventListener('mousedown', start);
+                btn.addEventListener('touchstart', start, { passive: false });
+                window.addEventListener('mouseup', stop);
+                window.addEventListener('touchend', stop);
+                btn.addEventListener('mouseleave', stop);
+            };
+            bindHoldZoom('btn-zoom-in', -1);
+            bindHoldZoom('btn-zoom-out', 1);
+        }
+
+        function applySingleZoomStep(dir) {
+            if (activeViewerMode === 'three') {
+                targetRadius = Math.max(2.3, Math.min(10.5, targetRadius + dir * 0.55));
+            } else {
+                const viewer = document.getElementById('glb-viewer');
+                if (viewer && typeof viewer.getFieldOfView === 'function') {
+                    const currentFov = viewer.getFieldOfView();
+                    const nextFov = Math.max(15, Math.min(60, currentFov + dir * 5));
+                    viewer.fieldOfView = `${nextFov}deg`;
+                }
+            }
+        }
+
+        function updateExplodeButtonUI() {
+            const isDisassembled = targetExplode >= 0.5;
+            const label = document.getElementById('explode-toggle-label');
+            const icon = document.getElementById('explode-toggle-icon');
+            const btn = document.getElementById('btn-explode-toggle');
+            if (label) label.textContent = isDisassembled ? 'Собрать' : 'Разборка';
+            if (icon) {
+                icon.className = isDisassembled
+                    ? 'fa-solid fa-down-left-and-up-right-to-center'
+                    : 'fa-solid fa-up-right-and-down-left-from-center';
+            }
+            if (btn) {
+                btn.classList.toggle('bg-cyan-500', isDisassembled);
+                btn.classList.toggle('text-slate-950', isDisassembled);
+                btn.classList.toggle('bg-cyan-500/15', !isDisassembled);
+                btn.classList.toggle('text-cyan-700', !isDisassembled);
+                btn.classList.toggle('dark:text-cyan-300', !isDisassembled);
+            }
+        }
+
+        function setExplodePercent(val) {
+            const num = Math.max(0, Math.min(100, Number(val) || 0));
+            targetExplode = num / 100;
+            const slider = document.getElementById('explode-slider');
+            const label = document.getElementById('explode-percent');
+            if (slider && Number(slider.value) !== num) slider.value = num;
+            if (label) label.textContent = `${num}%`;
+            updateExplodeButtonUI();
+        }
+
+        function toggleExplodedView() {
+            const device = devicesData[currentDeviceId];
+            if (activeViewerMode !== 'three' || !device?.supportsExplode) return;
+            setExplodePercent(targetExplode >= 0.5 ? 0 : 100);
+        }
+
+        function toggleAutoRotate() {
+            isAutoRotating = !isAutoRotating;
+            const viewer = document.getElementById('glb-viewer');
+            if (viewer) {
+                viewer.autoRotate = isAutoRotating;
+                viewer.rotationPerSecond = isAutoRotating ? '15deg' : '0deg';
+            }
+            const btn = document.getElementById('btn-auto-rotate');
+            if (btn) {
+                btn.classList.toggle('text-cyan-600', isAutoRotating);
+                btn.classList.toggle('dark:text-cyan-400', isAutoRotating);
+                btn.classList.toggle('text-slate-500', !isAutoRotating);
+            }
+        }
+
+        function toggleHotspots() {
+            showHotspots = !showHotspots;
+            const layer = document.getElementById('hotspots-layer');
+            if (layer) layer.style.display = showHotspots ? 'block' : 'none';
+            if (!showHotspots) closeHotspotPopover();
+            const btn = document.getElementById('btn-hotspots');
+            if (btn) {
+                btn.classList.toggle('text-cyan-600', showHotspots);
+                btn.classList.toggle('dark:text-cyan-400', showHotspots);
+                btn.classList.toggle('text-slate-500', !showHotspots);
+            }
+        }
+
+        function setWireframeState(enabled) {
+            isWireframe = enabled;
+            if (modelGroup) {
+                modelGroup.traverse(obj => {
+                    if (obj.isMesh && obj.material) {
+                        const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+                        mats.forEach(m => { m.wireframe = isWireframe; });
+                    }
+                });
+            }
+            const btn = document.getElementById('btn-wireframe');
+            if (btn) {
+                btn.classList.toggle('text-cyan-600', isWireframe);
+                btn.classList.toggle('dark:text-cyan-400', isWireframe);
+            }
+        }
+
+        function toggleWireframe() {
+            if (activeViewerMode !== 'three') return;
+            setWireframeState(!isWireframe);
+        }
+
+        function resetGLBCamera() {
+            const viewer = document.getElementById('glb-viewer');
+            if (!viewer) return;
+            viewer.cameraOrbit = '35deg 70deg 105%';
+            viewer.cameraTarget = 'auto auto auto';
+            viewer.fieldOfView = 'auto';
+        }
+
+        function reset3DCamera(notify = true) {
+            if (activeViewerMode === 'three') {
+                targetTheta = 0.65;
+                targetPhi = 1.12;
+                targetRadius = 5.3;
+            } else {
+                resetGLBCamera();
+            }
+            if (notify) showToast('Ракурс камеры сброшен', 'fa-arrows-rotate', 'text-cyan-500');
+        }
+
+        function toggleFullscreenViewport() {
+            const el = document.getElementById('viewport-stage');
+            if (!el) return;
+            if (!document.fullscreenElement) {
+                el.requestFullscreen?.().catch(err => console.warn('[Arch3D] Fullscreen отклонён:', err));
+            } else {
+                document.exitFullscreen?.().catch(err => console.warn('[Arch3D] Ошибка выхода из Fullscreen:', err));
+            }
+        }
+
+        function getTimestampString() {
+            const d = new Date();
+            const pad = (n) => String(n).padStart(2, '0');
+            return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+        }
+
+        function capture3DScreenshot() {
+            const filename = `arch3d_${currentDeviceId}_${currentComponentKey}_${getTimestampString()}.png`;
+            const isDark = document.documentElement.classList.contains('dark');
+
+            if (activeViewerMode !== 'three') {
+                const viewer = document.getElementById('glb-viewer');
+                if (viewer && typeof viewer.toDataURL === 'function') {
+                    try {
+                        const rawUrl = viewer.toDataURL('image/png');
+                        const img = new Image();
+                        img.onload = () => {
+                            const c = document.createElement('canvas');
+                            c.width = img.width || 1280;
+                            c.height = img.height || 720;
+                            const ctx = c.getContext('2d');
+                            ctx.fillStyle = isDark ? '#0b1120' : '#e2e8f0';
+                            ctx.fillRect(0, 0, c.width, c.height);
+                            ctx.drawImage(img, 0, 0);
+                            const a = document.createElement('a');
+                            a.href = c.toDataURL('image/png');
+                            a.download = filename;
+                            a.click();
+                            showToast('Скриншот GLB-модели сохранён (PNG)', 'fa-camera', 'text-emerald-500');
+                        };
+                        img.src = rawUrl;
+                        return;
+                    } catch (err) {
+                        console.warn('[Arch3D] Ошибка скриншота model-viewer:', err);
+                    }
+                }
+                showToast('Не удалось сохранить скриншот GLB', 'fa-triangle-exclamation', 'text-amber-500');
+                return;
+            }
+
+            if (!renderer || !scene || !camera) return;
+            try {
+                scene.background = new THREE.Color(isDark ? 0x0b1120 : 0xe2e8f0);
+                renderer.render(scene, camera);
+                const url = renderer.domElement.toDataURL('image/png');
+                scene.background = null;
+                renderer.render(scene, camera);
+
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                a.click();
+                showToast('Скриншот 3D-модели сохранён (PNG)', 'fa-camera', 'text-emerald-500');
+            } catch (err) {
+                scene.background = null;
+                console.warn('[Arch3D] Ошибка скриншота Three.js:', err);
+                showToast('Не удалось сохранить скриншот', 'fa-triangle-exclamation', 'text-amber-500');
+            }
+        }
+
+        /* ============================================================
+           ГЛАВНЫЙ ЦИКЛ АНИМАЦИИ
+           ============================================================ */
+        function applyExplodePositions(factor) {
+            modelGroup.traverse(obj => {
+                if (obj.userData.basePos && obj.userData.explodeVec) {
+                    obj.position.copy(obj.userData.basePos).addScaledVector(obj.userData.explodeVec, factor);
+                }
+            });
+        }
+
+        function animate3D() {
+            animFrameId = requestAnimationFrame(animate3D);
+            if (!webglAvailable || !renderer || !scene || !camera) return;
+
+            const delta = Math.min(clock.getDelta(), 0.05);
+
+            if (activeZoomDir !== 0 && activeViewerMode === 'three') {
+                targetRadius = Math.max(2.3, Math.min(10.5, targetRadius + activeZoomDir * delta * 3.8));
+            }
+
+            if (isAutoRotating && !isPointerDown && activeViewerMode === 'three') {
+                targetTheta += delta * 0.28;
+            }
+
+            camTheta += (targetTheta - camTheta) * 0.12;
+            camPhi += (targetPhi - camPhi) * 0.12;
+            camRadius += (targetRadius - camRadius) * 0.12;
+
+            camera.position.x = camRadius * Math.sin(camPhi) * Math.sin(camTheta);
+            camera.position.y = camRadius * Math.cos(camPhi);
+            camera.position.z = camRadius * Math.sin(camPhi) * Math.cos(camTheta);
+            camera.lookAt(0, 0, 0);
+
+            if (keyLight) {
+                keyLight.position.set(
+                    camera.position.x + 2.5,
+                    camera.position.y + 4.0,
+                    camera.position.z + 2.5
+                );
+            }
+
+            if (currentExplode !== targetExplode) {
+                const diff = targetExplode - currentExplode;
+                if (Math.abs(diff) < 0.002) {
+                    currentExplode = targetExplode;
+                } else {
+                    currentExplode += diff * 0.14;
+                }
+                applyExplodePositions(currentExplode);
+            }
+
+            const fanStep = delta * 2.2;
+            for (let i = 0; i < spinObjects.length; i++) {
+                spinObjects[i].rotation.z -= fanStep;
+            }
+
+            if (activeViewerMode === 'three') {
+                renderer.render(scene, camera);
+                updateHotspotsProjection();
+            }
+        }
+
+        /* ============================================================
+           ИНТЕРАКТИВНЫЙ ТЕСТ
+           ============================================================ */
+        function loadQuizState() {
+            try {
+                const raw = localStorage.getItem(STORAGE_KEY_QUIZ);
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    if (parsed && parsed.version === STORAGE_VERSION && Array.isArray(parsed.answers) && parsed.answers.length === quizQuestions.length) {
+                        quizState = {
+                            index: Math.max(0, Math.min(quizQuestions.length - 1, Number(parsed.index) || 0)),
+                            answers: parsed.answers,
+                            finished: Boolean(parsed.finished),
+                            bestScore: typeof parsed.bestScore === 'number' ? parsed.bestScore : null,
+                            attempts: Number(parsed.attempts) || 0
+                        };
+                    } else {
+                        localStorage.removeItem(STORAGE_KEY_QUIZ);
+                    }
+                }
+            } catch (err) {
+                console.warn('[Arch3D] Ошибка чтения состояния теста:', err);
+            }
+            updateQuizHeaderStats();
+        }
+
+        function saveQuizState() {
+            try {
+                localStorage.setItem(STORAGE_KEY_QUIZ, JSON.stringify({
+                    version: STORAGE_VERSION,
+                    ...quizState
+                }));
+            } catch (err) {
+                console.warn('[Arch3D] Ошибка сохранения состояния теста:', err);
+            }
+            updateQuizHeaderStats();
+        }
+
+        function getCurrentQuizScore() {
+            return quizState.answers.reduce((acc, ans, idx) => acc + (ans === quizQuestions[idx].answer ? 1 : 0), 0);
+        }
+
+        function updateQuizHeaderStats() {
+            const bestText = quizState.bestScore !== null ? `${quizState.bestScore}/${quizQuestions.length}` : '—';
+            const headerBest = document.getElementById('header-quiz-best');
+            if (headerBest) headerBest.textContent = bestText;
+            const statsSummary = document.getElementById('quiz-stats-summary');
+            if (statsSummary) statsSummary.textContent = `Попыток: ${quizState.attempts} • Лучший результат: ${bestText}`;
+        }
+
+        function renderQuizQuestion() {
+            const q = quizQuestions[quizState.index];
+            const chosenIdx = quizState.answers[quizState.index];
+            const alreadyAnswered = chosenIdx !== null;
+            const score = getCurrentQuizScore();
+
+            document.getElementById('quiz-body').classList.remove('hidden');
+            document.getElementById('quiz-result').classList.add('hidden');
+
+            document.getElementById('quiz-counter').textContent = `Вопрос ${quizState.index + 1} / ${quizQuestions.length}`;
+            document.getElementById('quiz-score-badge').textContent = `Баллы: ${score}`;
+            document.getElementById('quiz-progress-bar').style.width = `${((quizState.index + 1) / quizQuestions.length) * 100}%`;
+            document.getElementById('quiz-category').textContent = q.category;
+            document.getElementById('quiz-question').textContent = q.q;
+
+            const prevBtn = document.getElementById('quiz-prev-btn');
+            if (prevBtn) prevBtn.disabled = quizState.index === 0;
+
+            const optsEl = document.getElementById('quiz-options');
+            optsEl.innerHTML = '';
+            q.options.forEach((optText, i) => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'quiz-opt w-full text-left p-4 rounded-xl bg-slate-100/90 hover:bg-slate-200/90 dark:bg-slate-900/90 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 text-sm font-medium text-slate-800 dark:text-slate-200 transition-all flex items-center gap-3';
+                btn.innerHTML = `
+                    <span class="w-7 h-7 rounded-lg bg-slate-200 dark:bg-slate-800 font-mono font-bold text-xs flex items-center justify-center shrink-0">${String.fromCharCode(65 + i)}</span>
+                    <span>${optText}</span>
+                `;
+                if (alreadyAnswered) {
+                    btn.disabled = true;
+                    if (i === q.answer) {
+                        btn.classList.add('border-emerald-500', 'bg-emerald-500/15', 'text-emerald-800', 'dark:text-emerald-300');
+                    } else if (i === chosenIdx) {
+                        btn.classList.add('border-rose-500', 'bg-rose-500/15', 'text-rose-800', 'dark:text-rose-300');
+                    } else {
+                        btn.classList.add('opacity-55');
+                    }
+                } else {
+                    btn.onclick = () => selectQuizOption(i);
+                }
+                optsEl.appendChild(btn);
+            });
+
+            const fb = document.getElementById('quiz-feedback');
+            const nextBtn = document.getElementById('quiz-next-btn');
+            if (alreadyAnswered) {
+                const isCorrect = chosenIdx === q.answer;
+                fb.className = isCorrect
+                    ? 'p-4 rounded-xl border text-xs sm:text-sm leading-relaxed bg-emerald-500/10 border-emerald-500/30 text-emerald-800 dark:text-emerald-200'
+                    : 'p-4 rounded-xl border text-xs sm:text-sm leading-relaxed bg-rose-500/10 border-rose-500/30 text-rose-800 dark:text-rose-200';
+                fb.innerHTML = `
+                    <div class="font-bold mb-1 flex items-center gap-2">
+                        <i class="fa-solid ${isCorrect ? 'fa-circle-check text-emerald-500' : 'fa-circle-xmark text-rose-500'}" aria-hidden="true"></i>
+                        <span>${isCorrect ? 'Верно!' : 'Не совсем точно.'}</span>
+                    </div>
+                    <p>${q.explanation}</p>
+                `;
+                fb.classList.remove('hidden');
+                nextBtn.querySelector('span').textContent = quizState.index === quizQuestions.length - 1 ? 'Показать результат' : 'Следующий вопрос';
+                nextBtn.classList.remove('hidden');
+            } else {
+                fb.classList.add('hidden');
+                nextBtn.classList.add('hidden');
+            }
+        }
+
+        function selectQuizOption(idx) {
+            if (quizState.answers[quizState.index] !== null) return;
+            quizState.answers[quizState.index] = idx;
+            saveQuizState();
+            renderQuizQuestion();
+        }
+
+        function prevQuizQuestion() {
+            if (quizState.index > 0) {
+                quizState.index--;
+                saveQuizState();
+                renderQuizQuestion();
+            }
+        }
+
+        function nextQuizQuestion() {
+            if (quizState.index < quizQuestions.length - 1) {
+                quizState.index++;
+                saveQuizState();
+                renderQuizQuestion();
+            } else {
+                const score = getCurrentQuizScore();
+                if (!quizState.finished) {
+                    quizState.finished = true;
+                    quizState.attempts += 1;
+                    if (quizState.bestScore === null || score > quizState.bestScore) {
+                        quizState.bestScore = score;
+                    }
+                    saveQuizState();
+                }
+                showQuizResultsScreen();
+            }
+        }
+
+        function showQuizResultsScreen() {
+            const score = getCurrentQuizScore();
+            const pct = Math.round((score / quizQuestions.length) * 100);
+
+            document.getElementById('quiz-body').classList.add('hidden');
+            document.getElementById('quiz-result').classList.remove('hidden');
+            document.getElementById('quiz-progress-bar').style.width = '100%';
+            document.getElementById('quiz-score-badge').textContent = `Баллы: ${score}`;
+
+            let title = 'Хорошее начало!';
+            if (pct >= 90) title = 'Мастер архитектуры ЭВМ!';
+            else if (pct >= 70) title = 'Отличный результат!';
+            else if (pct >= 50) title = 'Уверенный базовый уровень!';
+
+            document.getElementById('quiz-result-title').textContent = title;
+            document.getElementById('quiz-result-subtitle').textContent = `Вы правильно ответили на ${score} из ${quizQuestions.length} вопросов (${pct}%).`;
+
+            const listEl = document.getElementById('quiz-review-list');
+            listEl.innerHTML = quizQuestions.map((q, i) => {
+                const userAns = quizState.answers[i];
+                const ok = userAns === q.answer;
+                return `
+                    <div class="p-3.5 rounded-xl border text-xs space-y-1.5 ${
+                        ok
+                            ? 'bg-emerald-500/5 border-emerald-500/30'
+                            : 'bg-rose-500/5 border-rose-500/30'
+                    }">
+                        <div class="flex items-start justify-between gap-2 font-bold text-slate-900 dark:text-white">
+                            <span>${i + 1}. ${q.q}</span>
+                            <i class="fa-solid ${ok ? 'fa-circle-check text-emerald-500' : 'fa-circle-xmark text-rose-500'} shrink-0 mt-0.5" aria-hidden="true"></i>
+                        </div>
+                        <p class="text-slate-600 dark:text-slate-300">
+                            Ваш ответ: <span class="font-semibold ${ok ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'}">${userAns !== null ? q.options[userAns] : '—'}</span>
+                            ${!ok ? ` • Правильно: <span class="font-semibold text-emerald-700 dark:text-emerald-400">${q.options[q.answer]}</span>` : ''}
+                        </p>
+                        <p class="text-[11px] text-slate-500 dark:text-slate-400">${q.explanation}</p>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function restartQuiz() {
+            quizState.index = 0;
+            quizState.answers = Array(quizQuestions.length).fill(null);
+            quizState.finished = false;
+            saveQuizState();
+            renderQuizQuestion();
+        }
+
+        /* ============================================================
+           ГОРЯЧИЕ КЛАВИШИ И СТАРТ
+           ============================================================ */
+        window.addEventListener('keydown', e => {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+            const isR = e.key === 'r' || e.key === 'R' || e.key === 'к' || e.key === 'К';
+            const isE = e.key === 'e' || e.key === 'E' || e.key === 'у' || e.key === 'У';
+            const isSpace = e.code === 'Space';
+
+            if (!isR && !isE && !isSpace) return;
+
+            const explorerVisible = !document.getElementById('tab-explorer')?.classList.contains('hidden');
+            if (!explorerVisible) {
+                if (isR || isE) {
+                    showToast('Откройте 3D-лабораторию, чтобы использовать горячие клавиши', 'fa-keyboard', 'text-cyan-500');
+                }
+                return;
+            }
+
+            if (isSpace) {
+                e.preventDefault();
+                toggleAutoRotate();
+            } else if (isR) {
+                reset3DCamera();
+            } else if (isE) {
+                if (activeViewerMode === 'three' && devicesData[currentDeviceId]?.supportsExplode) {
+                    toggleExplodedView();
+                } else {
+                    showToast('Для GLB-моделей ПК взрыв-схема отключена', 'fa-cube', 'text-slate-400');
+                }
+            }
+        });
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initTheme();
+            updateHeroCounters();
+            loadStudyProgress();
+            loadQuizState();
+            initThreeEngine();
+            renderDeviceCards();
+            switchTab('devices');
+            if (webglAvailable) animate3D();
+        });
+    </script>
+</body>
+</html>
